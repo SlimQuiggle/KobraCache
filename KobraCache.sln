@@ -7,6 +7,12 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{38072CAD-222
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "KobraCache.Desktop", "src\KobraCache.Desktop\KobraCache.Desktop.csproj", "{25F89C8B-F82A-4CDB-BE38-A4C32682144E}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "KobraCache.Core", "src\KobraCache.Core\KobraCache.Core.csproj", "{8E22F7BA-5736-4C26-8FEE-ABE3F4A8FC07}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{99E9DDE7-6250-42C0-A207-5A8B6D0CD900}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "KobraCache.Tests", "tests\KobraCache.Tests\KobraCache.Tests.csproj", "{742734D2-5C16-4C61-BB8A-EF907506894A}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -20,8 +26,18 @@ Global
 		{25F89C8B-F82A-4CDB-BE38-A4C32682144E}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{25F89C8B-F82A-4CDB-BE38-A4C32682144E}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{25F89C8B-F82A-4CDB-BE38-A4C32682144E}.Release|Any CPU.Build.0 = Release|Any CPU
+		{8E22F7BA-5736-4C26-8FEE-ABE3F4A8FC07}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{8E22F7BA-5736-4C26-8FEE-ABE3F4A8FC07}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{8E22F7BA-5736-4C26-8FEE-ABE3F4A8FC07}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{8E22F7BA-5736-4C26-8FEE-ABE3F4A8FC07}.Release|Any CPU.Build.0 = Release|Any CPU
+		{742734D2-5C16-4C61-BB8A-EF907506894A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{742734D2-5C16-4C61-BB8A-EF907506894A}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{742734D2-5C16-4C61-BB8A-EF907506894A}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{742734D2-5C16-4C61-BB8A-EF907506894A}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
 		{25F89C8B-F82A-4CDB-BE38-A4C32682144E} = {38072CAD-2223-4A34-B3C8-90C3B16F8571}
+		{8E22F7BA-5736-4C26-8FEE-ABE3F4A8FC07} = {38072CAD-2223-4A34-B3C8-90C3B16F8571}
+		{742734D2-5C16-4C61-BB8A-EF907506894A} = {99E9DDE7-6250-42C0-A207-5A8B6D0CD900}
 	EndGlobalSection
 EndGlobal

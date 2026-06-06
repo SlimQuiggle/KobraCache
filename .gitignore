@@ -1,5 +1,6 @@
 .dotnet/
 .tools/
+dist/
 bin/
 obj/
 .vs/
