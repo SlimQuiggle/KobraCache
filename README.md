@@ -22,11 +22,11 @@ Manual IP entry does not provide delete credentials by itself. A manually entere
 
 KobraCache does not persist Anycubic cloud tokens. Cloud tokens are read from Slicer only during the explicit import action and kept in memory for the current app session.
 
-Cloud API paths are implemented from public behavior references and should be validated against a live logged-in Slicer account before using cloud deletion broadly.
+Cloud REST and MQTT paths are implemented from public behavior references and should be validated against a live logged-in Slicer account before using deletion broadly.
 
 Printer IPs are identifiers, not credentials. If a printer is only added by IP, KobraCache cannot list or delete files from it. Import Slicer Cloud or Slicer LAN credentials, then use the imported or matched printer row and click `Preview Files`.
 
-Cloud-mode printer-local cache and USB listing require Anycubic cloud MQTT support. KobraCache currently lists cloud account files through the REST API and lists local/USB files only when LAN MQTT credentials are available.
+Cloud-mode printer-local cache and USB listing use Anycubic cloud MQTT after a Slicer Cloud import. KobraCache lists cloud account files through the REST API, and it lists/deletes printer-local cache or USB files through LAN MQTT when LAN credentials are available or through cloud MQTT when cloud printer command metadata is available.
 
 ## Logs
 

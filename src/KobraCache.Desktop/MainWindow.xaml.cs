@@ -369,6 +369,10 @@ public partial class MainWindow : Window
             {
                 files.AddRange(await _lanClient.ListFilesAsync(printer, StorageTarget.LocalCache));
             }
+            else if (HasCloudPrinterCommandCapability(printer))
+            {
+                files.AddRange(await _cloudClient.ListFilesAsync(printer, StorageTarget.LocalCache));
+            }
             else
             {
                 skippedTargets.Add("local cache");
@@ -380,6 +384,10 @@ public partial class MainWindow : Window
             if (printer.HasLanCredentials)
             {
                 files.AddRange(await _lanClient.ListFilesAsync(printer, StorageTarget.Usb));
+            }
+            else if (HasCloudPrinterCommandCapability(printer))
+            {
+                files.AddRange(await _cloudClient.ListFilesAsync(printer, StorageTarget.Usb));
             }
             else
             {
@@ -429,7 +437,8 @@ public partial class MainWindow : Window
 
     private async Task DeleteFileAsync(PrinterIdentity printer, PrinterCacheFile file)
     {
-        IPrinterTransport transport = file.StorageTarget == StorageTarget.Cloud
+        IPrinterTransport transport = file.StorageTarget == StorageTarget.Cloud ||
+                                      !printer.HasLanCredentials && HasCloudPrinterCommandCapability(printer)
             ? _cloudClient
             : _lanClient;
 
@@ -651,6 +660,14 @@ public partial class MainWindow : Window
     {
         return !string.IsNullOrWhiteSpace(printer.CloudAccessToken) &&
                (!string.IsNullOrWhiteSpace(printer.CloudPrinterId) || !string.IsNullOrWhiteSpace(printer.CloudKey));
+    }
+
+    private static bool HasCloudPrinterCommandCapability(PrinterIdentity printer)
+    {
+        return !string.IsNullOrWhiteSpace(printer.CloudAccessToken) &&
+               !string.IsNullOrWhiteSpace(printer.CloudPrinterId) &&
+               !string.IsNullOrWhiteSpace(printer.CloudKey) &&
+               !string.IsNullOrWhiteSpace(printer.ModeId);
     }
 
     private static string FormatBytes(long bytes)

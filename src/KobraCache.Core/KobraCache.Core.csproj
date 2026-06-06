@@ -10,4 +10,10 @@
     <PackageReference Include="MQTTnet" Version="4.3.7.1207" />
   </ItemGroup>
 
+  <ItemGroup>
+    <EmbeddedResource Include="Cloud\Resources\anycubic_mqtt_tls_ca.crt" />
+    <EmbeddedResource Include="Cloud\Resources\anycubic_mqtt_tls_client.crt" />
+    <EmbeddedResource Include="Cloud\Resources\anycubic_mqtt_tls_client.key" />
+  </ItemGroup>
+
 </Project>

@@ -158,12 +158,12 @@ public sealed class CoreBehaviorTests
 
             if (path.EndsWith("/work/printer/getPrinters", StringComparison.Ordinal))
             {
-                return JsonResponse("""{"data":[{"id":"printer-1","key":"cloud-key","name":"Shop S1","model":"Kobra S1","machine_data":{"ip":"192.168.9.213"}}]}""");
+                return JsonResponse("""{"data":[{"id":"printer-1","key":"cloud-key","machine_type":15,"name":"Shop S1","model":"Kobra S1","machine_data":{"ip":"192.168.9.213"}}]}""");
             }
 
             if (path.EndsWith("/work/printer/printersStatus", StringComparison.Ordinal))
             {
-                return JsonResponse("""{"data":[{"id":"printer-1","status":"idle"}]}""");
+                return JsonResponse("""{"data":[{"id":"printer-1","status":1,"device_status":1,"available":1,"is_printing":1,"reason":"free"}]}""");
             }
 
             if (path.EndsWith("/work/index/files", StringComparison.Ordinal))
@@ -190,11 +190,90 @@ public sealed class CoreBehaviorTests
         Assert.Equal("Shop S1", printer.DisplayName);
         Assert.Equal("192.168.9.213", printer.IpAddress);
         Assert.Equal("session-token", printer.CloudAccessToken);
+        Assert.Equal("15", printer.ModeId);
+        Assert.Equal("cloud-key", printer.DeviceId);
         Assert.Equal(PrinterRuntimeStatus.Idle, status);
         Assert.Equal("cloud-old.gcode", files.Single().FileName);
         Assert.Equal(StorageTarget.Cloud, files.Single().StorageTarget);
         Assert.Contains(handler.Requests, request => request.Method == HttpMethod.Post && request.RequestUri!.AbsolutePath.EndsWith("/v3/public/loginWithAccessToken", StringComparison.Ordinal));
         Assert.Contains(handler.Requests, request => request.Method == HttpMethod.Post && request.RequestUri!.AbsolutePath.EndsWith("/work/index/delFiles", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task AnycubicCloudClient_maps_cloud_task_status_to_busy()
+    {
+        var handler = new StubHttpHandler(request =>
+        {
+            if (request.RequestUri!.AbsolutePath.EndsWith("/work/printer/printersStatus", StringComparison.Ordinal))
+            {
+                return JsonResponse("""{"data":[{"id":"printer-1","status":1,"device_status":1,"available":2,"is_printing":2,"reason":"unavailable reason:There is a task for the current printer"}]}""");
+            }
+
+            return new HttpResponseMessage(HttpStatusCode.NotFound);
+        });
+        var httpClient = new HttpClient(handler) { BaseAddress = new Uri("https://example.invalid/p/p/workbench/api/") };
+        var cloudClient = new AnycubicCloudClient(httpClient, new FakeCloudMqttGateway());
+        var printer = TestCloudPrinter();
+
+        var status = await cloudClient.GetStatusAsync(printer);
+
+        Assert.Equal(PrinterRuntimeStatus.Busy, status);
+    }
+
+    [Fact]
+    public async Task AnycubicCloudClient_lists_and_deletes_printer_storage_over_cloud_mqtt()
+    {
+        var handler = new StubHttpHandler(request =>
+        {
+            var path = request.RequestUri?.AbsolutePath ?? "";
+            if (path.EndsWith("/user/profile/userInfo", StringComparison.Ordinal))
+            {
+                return JsonResponse("""{"data":{"id":123,"user_email":"tester@example.invalid"}}""");
+            }
+
+            if (path.EndsWith("/work/operation/sendOrder", StringComparison.Ordinal))
+            {
+                return JsonResponse("""{"data":{"msgid":"order-msg"}}""");
+            }
+
+            return new HttpResponseMessage(HttpStatusCode.NotFound);
+        });
+        var gateway = new FakeCloudMqttGateway();
+        gateway.Responses.Enqueue("""{"type":"file","action":"listLocal","state":"done","data":{"records":[{"filename":"cache-old.gcode","timestamp":1700000000,"size":2048,"is_dir":false},{"filename":"folder","is_dir":true}]}}""");
+        gateway.Responses.Enqueue("""{"type":"file","action":"listUdisk","state":"done","data":{"records":[{"filename":"usb-old.gcode","timestamp":1700000001,"size":4096,"is_dir":false}]}}""");
+        gateway.Responses.Enqueue("""{"type":"file","action":"deleteLocal","state":"success","data":{}}""");
+        gateway.Responses.Enqueue("""{"type":"file","action":"deleteUdisk","state":"success","data":{}}""");
+        var httpClient = new HttpClient(handler) { BaseAddress = new Uri("https://example.invalid/p/p/workbench/api/") };
+        var cloudClient = new AnycubicCloudClient(httpClient, gateway);
+        var printer = TestCloudPrinter();
+
+        var localFiles = await cloudClient.ListFilesAsync(printer, StorageTarget.LocalCache);
+        var usbFiles = await cloudClient.ListFilesAsync(printer, StorageTarget.Usb);
+        await cloudClient.DeleteFileAsync(printer, localFiles.Single());
+        await cloudClient.DeleteFileAsync(printer, usbFiles.Single());
+
+        Assert.Equal(["listLocal", "listUdisk", "deleteLocal", "deleteUdisk"], gateway.Actions);
+        Assert.All(gateway.OrderMsgIds, msgId => Assert.Equal("order-msg", msgId));
+        Assert.Equal("cache-old.gcode", localFiles.Single().FileName);
+        Assert.Equal(StorageTarget.LocalCache, localFiles.Single().StorageTarget);
+        Assert.Equal("usb-old.gcode", usbFiles.Single().FileName);
+        Assert.Equal(StorageTarget.Usb, usbFiles.Single().StorageTarget);
+        Assert.DoesNotContain(localFiles, file => file.FileName == "folder");
+        var sendOrderBodies = handler.RequestBodies.Where(body => body.Contains("\"order_id\":", StringComparison.Ordinal)).ToArray();
+        Assert.Contains(sendOrderBodies, body => body.Contains("\"order_id\":103", StringComparison.Ordinal));
+        Assert.Contains(sendOrderBodies, body => body.Contains("\"order_id\":101", StringComparison.Ordinal));
+        Assert.Contains(sendOrderBodies, body => body.Contains("\"order_id\":104", StringComparison.Ordinal) && body.Contains("\"filename\":\"cache-old.gcode\"", StringComparison.Ordinal));
+        Assert.Contains(sendOrderBodies, body => body.Contains("\"order_id\":102", StringComparison.Ordinal) && body.Contains("\"filename\":\"usb-old.gcode\"", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void CloudMqttGateway_builds_options_from_embedded_certificates()
+    {
+        var method = typeof(MqttNetAnycubicCloudGateway).GetMethod("BuildOptions", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+
+        var options = method!.Invoke(null, [new AnycubicCloudMqttSession("session-token", "123", "tester@example.invalid")]);
+
+        Assert.NotNull(options);
     }
 
     private static PrinterIdentity TestPrinter()
@@ -221,6 +300,22 @@ public sealed class CoreBehaviorTests
             DeviceId = "device-1",
             MqttUsername = "user",
             MqttPassword = "password"
+        };
+    }
+
+    private static PrinterIdentity TestCloudPrinter()
+    {
+        return new PrinterIdentity
+        {
+            Key = "cloud:printer-1",
+            DisplayName = "Cloud Printer",
+            Source = PrinterSource.SlicerCloud,
+            ConnectionMode = PrinterConnectionMode.Cloud,
+            CloudPrinterId = "printer-1",
+            CloudKey = "cloud-key",
+            CloudAccessToken = "session-token",
+            ModeId = "15",
+            DeviceId = "cloud-key"
         };
     }
 
@@ -273,6 +368,31 @@ public sealed class CoreBehaviorTests
         }
     }
 
+    private sealed class FakeCloudMqttGateway : IAnycubicCloudMqttGateway
+    {
+        public Queue<string> Responses { get; } = new();
+
+        public List<string> Actions { get; } = [];
+
+        public List<string> OrderMsgIds { get; } = [];
+
+        public List<AnycubicCloudMqttSession> Sessions { get; } = [];
+
+        public async Task<string> SendOrderAndWaitForResponseAsync(
+            PrinterIdentity printer,
+            AnycubicCloudMqttSession session,
+            string action,
+            Func<CancellationToken, Task<string?>> sendOrderAsync,
+            TimeSpan timeout,
+            CancellationToken cancellationToken = default)
+        {
+            Actions.Add(action);
+            Sessions.Add(session);
+            OrderMsgIds.Add(await sendOrderAsync(cancellationToken) ?? "");
+            return Responses.Dequeue();
+        }
+    }
+
     private sealed class StubHttpHandler : HttpMessageHandler
     {
         private readonly Func<HttpRequestMessage, HttpResponseMessage> _handler;
@@ -284,10 +404,15 @@ public sealed class CoreBehaviorTests
 
         public List<HttpRequestMessage> Requests { get; } = [];
 
-        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        public List<string> RequestBodies { get; } = [];
+
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
             Requests.Add(request);
-            return Task.FromResult(_handler(request));
+            RequestBodies.Add(request.Content is null
+                ? string.Empty
+                : await request.Content.ReadAsStringAsync(cancellationToken));
+            return _handler(request);
         }
     }
 }
