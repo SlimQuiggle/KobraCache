@@ -17,6 +17,7 @@ public sealed record PrinterIdentity
     public string? MqttPassword { get; init; }
     public string? CloudPrinterId { get; init; }
     public string? CloudKey { get; init; }
+    public string? CloudAccessToken { get; init; }
     public DateTimeOffset ImportedAt { get; init; } = DateTimeOffset.Now;
 
     public string NameOrAddress => FirstNonBlank(DisplayName, ModelName, IpAddress, Key);

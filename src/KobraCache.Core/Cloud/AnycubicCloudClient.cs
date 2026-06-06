@@ -30,7 +30,7 @@ public sealed class AnycubicCloudClient : IPrinterTransport
         await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
         using var document = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken).ConfigureAwait(false);
         return EnumerateObjects(document.RootElement)
-            .Select(ToPrinter)
+            .Select(item => ToPrinter(item, accessToken))
             .Where(printer => printer is not null)
             .Cast<PrinterIdentity>()
             .GroupBy(printer => printer.Key, StringComparer.OrdinalIgnoreCase)
@@ -40,12 +40,12 @@ public sealed class AnycubicCloudClient : IPrinterTransport
 
     public async Task<PrinterRuntimeStatus> GetStatusAsync(PrinterIdentity printer, CancellationToken cancellationToken = default)
     {
-        if (string.IsNullOrWhiteSpace(printer.CloudKey))
+        if (string.IsNullOrWhiteSpace(printer.CloudAccessToken))
         {
             return PrinterRuntimeStatus.Unknown;
         }
 
-        using var request = CreateRequest(HttpMethod.Get, "work/printer/printersStatus", printer.CloudKey);
+        using var request = CreateRequest(HttpMethod.Get, "work/printer/printersStatus", printer.CloudAccessToken);
         using var response = await _httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
         if (!response.IsSuccessStatusCode)
         {
@@ -72,7 +72,7 @@ public sealed class AnycubicCloudClient : IPrinterTransport
             return Array.Empty<PrinterCacheFile>();
         }
 
-        if (string.IsNullOrWhiteSpace(printer.CloudKey))
+        if (string.IsNullOrWhiteSpace(printer.CloudAccessToken))
         {
             throw new InvalidOperationException("Cloud file listing requires a Slicer cloud token.");
         }
@@ -85,7 +85,7 @@ public sealed class AnycubicCloudClient : IPrinterTransport
             type = "gcode"
         };
 
-        using var request = CreateJsonRequest(HttpMethod.Post, "work/index/files", printer.CloudKey, body);
+        using var request = CreateJsonRequest(HttpMethod.Post, "work/index/files", printer.CloudAccessToken, body);
         using var response = await _httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
         response.EnsureSuccessStatusCode();
 
@@ -106,7 +106,7 @@ public sealed class AnycubicCloudClient : IPrinterTransport
             throw new InvalidOperationException("This cloud client can only delete cloud files.");
         }
 
-        if (string.IsNullOrWhiteSpace(printer.CloudKey))
+        if (string.IsNullOrWhiteSpace(printer.CloudAccessToken))
         {
             throw new InvalidOperationException("Cloud deletion requires a Slicer cloud token.");
         }
@@ -120,7 +120,7 @@ public sealed class AnycubicCloudClient : IPrinterTransport
             ids = new[] { fileId }
         };
 
-        using var request = CreateJsonRequest(HttpMethod.Post, "work/index/delFiles", printer.CloudKey, body);
+        using var request = CreateJsonRequest(HttpMethod.Post, "work/index/delFiles", printer.CloudAccessToken, body);
         using var response = await _httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
         response.EnsureSuccessStatusCode();
     }
@@ -147,7 +147,7 @@ public sealed class AnycubicCloudClient : IPrinterTransport
         request.Headers.TryAddWithoutValidation("XX-LANGUAGE", CultureInfo.CurrentUICulture.Name.Replace('-', '_'));
     }
 
-    private static PrinterIdentity? ToPrinter(JsonElement item)
+    private static PrinterIdentity? ToPrinter(JsonElement item, string accessToken)
     {
         var id = GetString(item, "id") ?? GetString(item, "printer_id") ?? GetString(item, "device_id");
         var key = GetString(item, "key") ?? GetString(item, "nonce");
@@ -166,6 +166,7 @@ public sealed class AnycubicCloudClient : IPrinterTransport
             Key = $"cloud:{FirstNonBlank(id, key, name)}",
             CloudPrinterId = id,
             CloudKey = key,
+            CloudAccessToken = accessToken,
             DisplayName = name,
             ModelName = model,
             IpAddress = ip,

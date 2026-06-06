@@ -8,9 +8,25 @@ using MQTTnet.Protocol;
 
 namespace KobraCache.Core.Transports;
 
+public interface ILanMqttGateway
+{
+    Task<string> SendCommandAsync(
+        PrinterIdentity printer,
+        string action,
+        object payload,
+        TimeSpan timeout,
+        CancellationToken cancellationToken = default);
+}
+
 public sealed class LanMqttPrinterClient : IPrinterTransport
 {
     private static readonly TimeSpan DefaultTimeout = TimeSpan.FromSeconds(12);
+    private readonly ILanMqttGateway _gateway;
+
+    public LanMqttPrinterClient(ILanMqttGateway? gateway = null)
+    {
+        _gateway = gateway ?? new MqttNetLanGateway();
+    }
 
     public Task<PrinterRuntimeStatus> GetStatusAsync(PrinterIdentity printer, CancellationToken cancellationToken = default)
     {
@@ -62,7 +78,7 @@ public sealed class LanMqttPrinterClient : IPrinterTransport
         return SendAsync(printer, action, payload, _ => true, cancellationToken);
     }
 
-    private static async Task<T> SendAsync<T>(
+    private async Task<T> SendAsync<T>(
         PrinterIdentity printer,
         string action,
         object payload,
@@ -74,52 +90,7 @@ public sealed class LanMqttPrinterClient : IPrinterTransport
             throw new InvalidOperationException("LAN MQTT requires imported Slicer LAN credentials.");
         }
 
-        var (host, port, useTls) = ResolveBroker(printer);
-        var msgId = GetPayloadMsgId(payload);
-        var responseTopic = $"anycubic/anycubicCloud/v1/printer/public/{printer.ModeId}/{printer.DeviceId}/#";
-        var commandTopic = $"anycubic/anycubicCloud/v1/slicer/printer/{printer.ModeId}/{printer.DeviceId}/{action}";
-        var completion = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
-
-        var factory = new MqttFactory();
-        using var client = factory.CreateMqttClient();
-        await using var registration = cancellationToken.Register(() => completion.TrySetCanceled(cancellationToken));
-
-        client.ApplicationMessageReceivedAsync += args =>
-        {
-            var text = Encoding.UTF8.GetString(args.ApplicationMessage.PayloadSegment);
-            if (IsExpectedResponse(text, msgId, action))
-            {
-                completion.TrySetResult(text);
-            }
-
-            return Task.CompletedTask;
-        };
-
-        var optionsBuilder = new MqttClientOptionsBuilder()
-            .WithClientId($"KobraCache-{Guid.NewGuid():N}")
-            .WithTcpServer(host, port)
-            .WithCredentials(printer.MqttUsername, printer.MqttPassword)
-            .WithCleanSession();
-
-        if (useTls)
-        {
-            optionsBuilder.WithTlsOptions(options => options.UseTls());
-        }
-
-        await client.ConnectAsync(optionsBuilder.Build(), cancellationToken).ConfigureAwait(false);
-        await client.SubscribeAsync(responseTopic, MqttQualityOfServiceLevel.AtLeastOnce, cancellationToken).ConfigureAwait(false);
-
-        var json = JsonSerializer.Serialize(payload);
-        var message = new MqttApplicationMessageBuilder()
-            .WithTopic(commandTopic)
-            .WithPayload(json)
-            .WithQualityOfServiceLevel(MqttQualityOfServiceLevel.AtLeastOnce)
-            .Build();
-
-        await client.PublishAsync(message, cancellationToken).ConfigureAwait(false);
-        var responseText = await completion.Task.WaitAsync(DefaultTimeout, cancellationToken).ConfigureAwait(false);
-        await client.DisconnectAsync(cancellationToken: CancellationToken.None).ConfigureAwait(false);
-
+        var responseText = await _gateway.SendCommandAsync(printer, action, payload, DefaultTimeout, cancellationToken).ConfigureAwait(false);
         using var document = JsonDocument.Parse(responseText);
         return parser(document);
     }
@@ -337,5 +308,63 @@ public sealed class LanMqttPrinterClient : IPrinterTransport
         }
 
         return string.Empty;
+    }
+
+    private sealed class MqttNetLanGateway : ILanMqttGateway
+    {
+        public async Task<string> SendCommandAsync(
+            PrinterIdentity printer,
+            string action,
+            object payload,
+            TimeSpan timeout,
+            CancellationToken cancellationToken = default)
+        {
+            var (host, port, useTls) = ResolveBroker(printer);
+            var msgId = GetPayloadMsgId(payload);
+            var responseTopic = $"anycubic/anycubicCloud/v1/printer/public/{printer.ModeId}/{printer.DeviceId}/#";
+            var commandTopic = $"anycubic/anycubicCloud/v1/slicer/printer/{printer.ModeId}/{printer.DeviceId}/{action}";
+            var completion = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+            var factory = new MqttFactory();
+            using var client = factory.CreateMqttClient();
+            await using var registration = cancellationToken.Register(() => completion.TrySetCanceled(cancellationToken));
+
+            client.ApplicationMessageReceivedAsync += args =>
+            {
+                var text = Encoding.UTF8.GetString(args.ApplicationMessage.PayloadSegment);
+                if (IsExpectedResponse(text, msgId, action))
+                {
+                    completion.TrySetResult(text);
+                }
+
+                return Task.CompletedTask;
+            };
+
+            var optionsBuilder = new MqttClientOptionsBuilder()
+                .WithClientId($"KobraCache-{Guid.NewGuid():N}")
+                .WithTcpServer(host, port)
+                .WithCredentials(printer.MqttUsername, printer.MqttPassword)
+                .WithCleanSession();
+
+            if (useTls)
+            {
+                optionsBuilder.WithTlsOptions(options => options.UseTls());
+            }
+
+            await client.ConnectAsync(optionsBuilder.Build(), cancellationToken).ConfigureAwait(false);
+            await client.SubscribeAsync(responseTopic, MqttQualityOfServiceLevel.AtLeastOnce, cancellationToken).ConfigureAwait(false);
+
+            var json = JsonSerializer.Serialize(payload);
+            var message = new MqttApplicationMessageBuilder()
+                .WithTopic(commandTopic)
+                .WithPayload(json)
+                .WithQualityOfServiceLevel(MqttQualityOfServiceLevel.AtLeastOnce)
+                .Build();
+
+            await client.PublishAsync(message, cancellationToken).ConfigureAwait(false);
+            var responseText = await completion.Task.WaitAsync(timeout, cancellationToken).ConfigureAwait(false);
+            await client.DisconnectAsync(cancellationToken: CancellationToken.None).ConfigureAwait(false);
+            return responseText;
+        }
     }
 }
