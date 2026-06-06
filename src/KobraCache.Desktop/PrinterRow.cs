@@ -84,7 +84,11 @@ public sealed class PrinterRow : INotifyPropertyChanged
         }
     }
 
-    public string StatusText => _status.ToString();
+    public string StatusText => _status switch
+    {
+        PrinterRuntimeStatus.CredentialsNeeded => "Needs import",
+        _ => _status.ToString()
+    };
 
     public string DetailText
     {
@@ -108,7 +112,7 @@ public sealed class PrinterRow : INotifyPropertyChanged
 
             if (!HasLanCredentials && !HasCloudToken)
             {
-                parts.Add("No delete credentials");
+                parts.Add("Import Slicer Cloud or Slicer LAN credentials to list files");
             }
 
             return string.Join(" | ", parts);

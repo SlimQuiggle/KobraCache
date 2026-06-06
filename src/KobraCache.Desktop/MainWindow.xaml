@@ -56,7 +56,10 @@
         <DockPanel Grid.Row="0" Margin="0,0,0,12">
             <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" VerticalAlignment="Center">
                 <Image Source="Assets/KobraCacheLogo.png" Width="44" Height="44" Margin="0,0,10,0" />
-                <TextBlock Text="KobraCache" FontSize="28" FontWeight="SemiBold" Foreground="#0F172A" VerticalAlignment="Center" />
+                <StackPanel VerticalAlignment="Center">
+                    <TextBlock Text="KobraCache" FontSize="28" FontWeight="SemiBold" Foreground="#0F172A" />
+                    <TextBlock x:Name="VersionText" Text="v0.2.0" Foreground="#64748B" />
+                </StackPanel>
             </StackPanel>
             <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
                 <Button Content="Open Logs" Click="OpenLogs_Click" />
@@ -105,10 +108,18 @@
                         <RowDefinition Height="Auto" />
                     </Grid.RowDefinitions>
 
-                    <DockPanel Grid.Row="0" Margin="0,0,0,8">
-                        <TextBlock Text="Printers" FontSize="16" FontWeight="SemiBold" Foreground="#0F172A" />
-                        <Button DockPanel.Dock="Right" Content="Refresh Status" Click="RefreshStatus_Click" />
-                    </DockPanel>
+                    <Grid Grid.Row="0" Margin="0,0,0,8">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+                        <TextBlock Grid.Row="0" Text="Printers" FontSize="16" FontWeight="SemiBold" Foreground="#0F172A" />
+                        <WrapPanel Grid.Row="1" Margin="0,8,0,0">
+                            <Button Content="Preview Files" Click="PreviewSelectedPrinter_Click" />
+                            <Button Content="Refresh Status" Click="RefreshStatus_Click" />
+                            <Button Content="Remove Selected" Click="RemoveSelectedPrinter_Click" />
+                        </WrapPanel>
+                    </Grid>
 
                     <DataGrid x:Name="PrintersGrid" Grid.Row="1" ItemsSource="{Binding Printers}"
                               SelectionChanged="PrintersGrid_SelectionChanged" IsReadOnly="True">
@@ -116,7 +127,7 @@
                             <DataGridTextColumn Header="Name" Binding="{Binding Name}" Width="*" />
                             <DataGridTextColumn Header="IP" Binding="{Binding IpAddress}" Width="112" />
                             <DataGridTextColumn Header="Mode" Binding="{Binding CapabilityText}" Width="118" />
-                            <DataGridTextColumn Header="Status" Binding="{Binding StatusText}" Width="78" />
+                            <DataGridTextColumn Header="Status" Binding="{Binding StatusText}" Width="98" />
                         </DataGrid.Columns>
                     </DataGrid>
 

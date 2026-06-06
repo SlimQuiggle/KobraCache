@@ -24,6 +24,10 @@ KobraCache does not persist Anycubic cloud tokens. Cloud tokens are read from Sl
 
 Cloud API paths are implemented from public behavior references and should be validated against a live logged-in Slicer account before using cloud deletion broadly.
 
+Printer IPs are identifiers, not credentials. If a printer is only added by IP, KobraCache cannot list or delete files from it. Import Slicer Cloud or Slicer LAN credentials, then use the imported or matched printer row and click `Preview Files`.
+
+Cloud-mode printer-local cache and USB listing require Anycubic cloud MQTT support. KobraCache currently lists cloud account files through the REST API and lists local/USB files only when LAN MQTT credentials are available.
+
 ## Logs
 
 KobraCache writes diagnostic logs to:

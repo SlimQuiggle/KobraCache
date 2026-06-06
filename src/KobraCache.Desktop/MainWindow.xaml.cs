@@ -3,7 +3,6 @@ using System.ComponentModel;
 using System.Diagnostics;
 using System.Globalization;
 using System.Drawing;
-using System.Net.Sockets;
 using System.Windows;
 using System.Windows.Controls;
 using Forms = System.Windows.Forms;
@@ -30,9 +29,13 @@ public partial class MainWindow : Window
     private AppSettings _settings = new();
     private bool _isLoaded;
 
+    private sealed record FileLoadResult(IReadOnlyList<PrinterCacheFile> Files, IReadOnlyList<string> Messages);
+
     public MainWindow()
     {
         InitializeComponent();
+        Title = $"KobraCache v{AppVersion.Display}";
+        VersionText.Text = $"v{AppVersion.Display}";
         DataContext = this;
         Loaded += MainWindow_Loaded;
         Closing += MainWindow_Closing;
@@ -108,15 +111,27 @@ public partial class MainWindow : Window
                 return;
             }
 
+            AppLogger.Info("Starting Slicer cloud import.");
             var cloudPrinters = await _cloudClient.ListPrintersAsync(import.CloudAccessToken);
             foreach (var printer in cloudPrinters)
             {
                 UpsertPrinter(printer);
             }
 
+            AppLogger.Info($"Slicer cloud import returned {cloudPrinters.Count} printer(s).");
             SetStatus(cloudPrinters.Count == 0
-                ? "Cloud import completed with no printers returned."
+                ? "Cloud import returned 0 printers. Open Logs for the request diagnostics."
                 : $"Imported {cloudPrinters.Count} cloud printer(s).");
+
+            if (cloudPrinters.Count == 0)
+            {
+                MessageBox.Show(
+                    this,
+                    "Anycubic accepted the Slicer token but returned no printers. Confirm Slicer Next can see the printers while logged into this same account, then try importing again.",
+                    "KobraCache",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Information);
+            }
         });
     }
 
@@ -134,6 +149,33 @@ public partial class MainWindow : Window
             selected.Status = await ResolveStatusAsync(selected.Printer);
             RefreshSelectedPrinterDetails();
             SetStatus($"{selected.Name} status: {selected.StatusText}.");
+        });
+    }
+
+    private async void PreviewSelectedPrinter_Click(object sender, RoutedEventArgs e)
+    {
+        await RunUiTaskAsync(PreviewSelectedPrinterAsync);
+    }
+
+    private async void RemoveSelectedPrinter_Click(object sender, RoutedEventArgs e)
+    {
+        await RunUiTaskAsync(async () =>
+        {
+            var selected = GetSelectedPrinterRow();
+            if (selected is null)
+            {
+                SetStatus("Select a printer first.");
+                return;
+            }
+
+            var name = selected.Name;
+            _printers.Remove(selected);
+            _filePreviewRows.Clear();
+            DeleteSelectedButton.IsEnabled = false;
+            PreviewSummaryText.Text = "No preview loaded";
+            RefreshSelectedPrinterDetails();
+            await SaveSettingsAsync();
+            SetStatus($"Removed {name}.");
         });
     }
 
@@ -225,9 +267,9 @@ public partial class MainWindow : Window
         }
 
         selected.Status = await ResolveStatusAsync(selected.Printer);
-        var files = await LoadFilesAsync(selected.Printer);
+        var loadResult = await LoadFilesAsync(selected.Printer);
         var policy = GetRetentionPolicy();
-        var preview = _retentionFilter.CreatePreview(selected.Printer, selected.Status, files, policy);
+        var preview = _retentionFilter.CreatePreview(selected.Printer, selected.Status, loadResult.Files, policy);
 
         _filePreviewRows.Clear();
         foreach (var item in preview.Items)
@@ -236,7 +278,10 @@ public partial class MainWindow : Window
         }
 
         DeleteSelectedButton.IsEnabled = _filePreviewRows.Any(row => row.IsSelected && row.CanDeleteWhenSelected);
-        PreviewSummaryText.Text = BuildPreviewSummary(preview);
+        var summary = BuildPreviewSummary(preview);
+        PreviewSummaryText.Text = loadResult.Messages.Count > 0
+            ? $"{summary}. {string.Join(" ", loadResult.Messages)}"
+            : summary;
         RefreshSelectedPrinterDetails();
         await SaveSettingsAsync();
     }
@@ -312,9 +357,10 @@ public partial class MainWindow : Window
         }
     }
 
-    private async Task<IReadOnlyList<PrinterCacheFile>> LoadFilesAsync(PrinterIdentity printer)
+    private async Task<FileLoadResult> LoadFilesAsync(PrinterIdentity printer)
     {
         var files = new List<PrinterCacheFile>();
+        var messages = new List<string>();
         var skippedTargets = new List<string>();
 
         if (LocalTargetCheckBox.IsChecked == true)
@@ -345,7 +391,12 @@ public partial class MainWindow : Window
         {
             if (HasCloudCapability(printer))
             {
-                files.AddRange(await _cloudClient.ListFilesAsync(printer, StorageTarget.Cloud));
+                var cloudFiles = await _cloudClient.ListFilesAsync(printer, StorageTarget.Cloud);
+                files.AddRange(cloudFiles);
+                if (cloudFiles.Count == 0)
+                {
+                    messages.Add("Cloud API returned 0 cloud files for this account.");
+                }
             }
             else
             {
@@ -353,12 +404,27 @@ public partial class MainWindow : Window
             }
         }
 
-        if (skippedTargets.Count > 0 && files.Count == 0)
+        if (skippedTargets.Count > 0)
         {
-            SetStatus($"Skipped {string.Join(", ", skippedTargets)}. No credentials are available for the selected target(s).");
+            var skipped = string.Join(", ", skippedTargets);
+            var message = printer.Source == PrinterSource.ManualIp && !printer.HasLanCredentials && !HasCloudCapability(printer)
+                ? $"Manual IPs cannot list files by themselves. Import Slicer Cloud or Slicer LAN credentials, then select the imported/matched printer. Skipped {skipped}."
+                : $"Skipped {skipped}; no credentials are available for those selected target(s).";
+            messages.Add(message);
+            AppLogger.Warn(message);
         }
 
-        return files;
+        if (files.Count == 0 && messages.Count == 0)
+        {
+            messages.Add("No files were returned for the selected target(s).");
+        }
+
+        if (files.Count > 0)
+        {
+            AppLogger.Info($"Loaded {files.Count} file(s) for {printer.NameOrAddress}.");
+        }
+
+        return new FileLoadResult(files, messages);
     }
 
     private async Task DeleteFileAsync(PrinterIdentity printer, PrinterCacheFile file)
@@ -388,30 +454,12 @@ public partial class MainWindow : Window
                 return await _lanClient.GetStatusAsync(printer);
             }
 
-            return await ProbeManualPrinterAsync(printer);
+            return PrinterRuntimeStatus.CredentialsNeeded;
         }
         catch
         {
             return PrinterRuntimeStatus.Unknown;
         }
-    }
-
-    private static async Task<PrinterRuntimeStatus> ProbeManualPrinterAsync(PrinterIdentity printer)
-    {
-        if (!printer.HasValidIp || string.IsNullOrWhiteSpace(printer.IpAddress))
-        {
-            return PrinterRuntimeStatus.Unknown;
-        }
-
-        using var client = new TcpClient();
-        var connectTask = client.ConnectAsync(printer.IpAddress, 9883);
-        var completed = await Task.WhenAny(connectTask, Task.Delay(TimeSpan.FromSeconds(2)));
-        if (completed != connectTask)
-        {
-            return PrinterRuntimeStatus.Offline;
-        }
-
-        return connectTask.IsCompletedSuccessfully ? PrinterRuntimeStatus.Unknown : PrinterRuntimeStatus.Offline;
     }
 
     private void InitializeTrayIcon()

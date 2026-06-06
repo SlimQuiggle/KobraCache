@@ -142,10 +142,20 @@ public sealed class CoreBehaviorTests
     {
         var handler = new StubHttpHandler(request =>
         {
-            Assert.Equal("token-123", request.Headers.Authorization?.Parameter);
-            Assert.True(request.Headers.Contains("XX-Token"));
-
             var path = request.RequestUri?.AbsolutePath ?? "";
+            Assert.True(request.Headers.Contains("Xx-Signature"));
+            Assert.True(request.Headers.Contains("Xx-Nonce"));
+            Assert.True(request.Headers.Contains("Xx-Timestamp"));
+
+            if (path.EndsWith("/v3/public/loginWithAccessToken", StringComparison.Ordinal))
+            {
+                Assert.False(request.Headers.Contains("XX-Token"));
+                return JsonResponse("""{"data":{"token":"session-token"}}""");
+            }
+
+            Assert.True(request.Headers.TryGetValues("XX-Token", out var values));
+            Assert.Equal("session-token", Assert.Single(values));
+
             if (path.EndsWith("/work/printer/getPrinters", StringComparison.Ordinal))
             {
                 return JsonResponse("""{"data":[{"id":"printer-1","key":"cloud-key","name":"Shop S1","model":"Kobra S1","machine_data":{"ip":"192.168.9.213"}}]}""");
@@ -171,7 +181,7 @@ public sealed class CoreBehaviorTests
         var httpClient = new HttpClient(handler) { BaseAddress = new Uri("https://example.invalid/p/p/workbench/api/") };
         var cloudClient = new AnycubicCloudClient(httpClient);
 
-        var printers = await cloudClient.ListPrintersAsync("token-123");
+        var printers = await cloudClient.ListPrintersAsync("slicer-token");
         var printer = Assert.Single(printers);
         var status = await cloudClient.GetStatusAsync(printer);
         var files = await cloudClient.ListFilesAsync(printer, StorageTarget.Cloud);
@@ -179,10 +189,11 @@ public sealed class CoreBehaviorTests
 
         Assert.Equal("Shop S1", printer.DisplayName);
         Assert.Equal("192.168.9.213", printer.IpAddress);
-        Assert.Equal("token-123", printer.CloudAccessToken);
+        Assert.Equal("session-token", printer.CloudAccessToken);
         Assert.Equal(PrinterRuntimeStatus.Idle, status);
         Assert.Equal("cloud-old.gcode", files.Single().FileName);
         Assert.Equal(StorageTarget.Cloud, files.Single().StorageTarget);
+        Assert.Contains(handler.Requests, request => request.Method == HttpMethod.Post && request.RequestUri!.AbsolutePath.EndsWith("/v3/public/loginWithAccessToken", StringComparison.Ordinal));
         Assert.Contains(handler.Requests, request => request.Method == HttpMethod.Post && request.RequestUri!.AbsolutePath.EndsWith("/work/index/delFiles", StringComparison.Ordinal));
     }
 

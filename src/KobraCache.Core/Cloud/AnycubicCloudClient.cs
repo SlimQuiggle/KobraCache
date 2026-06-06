@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Net.Http.Headers;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using KobraCache.Core.Models;
@@ -10,6 +11,10 @@ namespace KobraCache.Core.Cloud;
 public sealed class AnycubicCloudClient : IPrinterTransport
 {
     private static readonly Uri DefaultBaseUri = new("https://cloud-universe.anycubic.com/p/p/workbench/api/");
+    private const string AppId = "f9b3528877c94d5c9c5af32245db46ef";
+    private const string AppSecret = "0cf75926606049a3937f56b0373b99fb";
+    private const string SlicerVersion = "V3.0.0";
+    private const string DeviceType = "pcf";
     private readonly HttpClient _httpClient;
 
     public AnycubicCloudClient(HttpClient? httpClient = null)
@@ -21,16 +26,52 @@ public sealed class AnycubicCloudClient : IPrinterTransport
         }
     }
 
-    public async Task<IReadOnlyList<PrinterIdentity>> ListPrintersAsync(string accessToken, CancellationToken cancellationToken = default)
+    public async Task<string> AuthenticateSlicerTokenAsync(string slicerAccessToken, CancellationToken cancellationToken = default)
     {
-        using var request = CreateRequest(HttpMethod.Get, "work/printer/getPrinters", accessToken);
+        if (string.IsNullOrWhiteSpace(slicerAccessToken))
+        {
+            throw new InvalidOperationException("Slicer cloud import requires an access token from Slicer Next.");
+        }
+
+        var body = new
+        {
+            device_type = DeviceType,
+            access_token = slicerAccessToken
+        };
+
+        using var request = CreateJsonRequest(HttpMethod.Post, "v3/public/loginWithAccessToken", null, body);
         using var response = await _httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
-        response.EnsureSuccessStatusCode();
+        await EnsureSuccessAsync(response, cancellationToken).ConfigureAwait(false);
+
+        await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
+        using var document = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken).ConfigureAwait(false);
+        var token = GetString(document.RootElement, "data", "token")
+            ?? GetString(document.RootElement, "token");
+
+        if (string.IsNullOrWhiteSpace(token))
+        {
+            throw new InvalidOperationException("Anycubic login succeeded but did not return a session token.");
+        }
+
+        return token!;
+    }
+
+    public async Task<IReadOnlyList<PrinterIdentity>> ListPrintersAsync(string slicerAccessToken, CancellationToken cancellationToken = default)
+    {
+        var sessionToken = await AuthenticateSlicerTokenAsync(slicerAccessToken, cancellationToken).ConfigureAwait(false);
+        return await ListPrintersWithSessionTokenAsync(sessionToken, cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<IReadOnlyList<PrinterIdentity>> ListPrintersWithSessionTokenAsync(string sessionToken, CancellationToken cancellationToken = default)
+    {
+        using var request = CreateRequest(HttpMethod.Get, "work/printer/getPrinters", sessionToken);
+        using var response = await _httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
+        await EnsureSuccessAsync(response, cancellationToken).ConfigureAwait(false);
 
         await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
         using var document = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken).ConfigureAwait(false);
         return EnumerateObjects(document.RootElement)
-            .Select(item => ToPrinter(item, accessToken))
+            .Select(item => ToPrinter(item, sessionToken))
             .Where(printer => printer is not null)
             .Cast<PrinterIdentity>()
             .GroupBy(printer => printer.Key, StringComparer.OrdinalIgnoreCase)
@@ -42,7 +83,7 @@ public sealed class AnycubicCloudClient : IPrinterTransport
     {
         if (string.IsNullOrWhiteSpace(printer.CloudAccessToken))
         {
-            return PrinterRuntimeStatus.Unknown;
+            return PrinterRuntimeStatus.CredentialsNeeded;
         }
 
         using var request = CreateRequest(HttpMethod.Get, "work/printer/printersStatus", printer.CloudAccessToken);
@@ -74,20 +115,18 @@ public sealed class AnycubicCloudClient : IPrinterTransport
 
         if (string.IsNullOrWhiteSpace(printer.CloudAccessToken))
         {
-            throw new InvalidOperationException("Cloud file listing requires a Slicer cloud token.");
+            throw new InvalidOperationException("Cloud file listing requires a Slicer cloud token import.");
         }
 
         var body = new
         {
             page = 1,
-            page_size = 200,
-            pageSize = 200,
-            type = "gcode"
+            limit = 200
         };
 
         using var request = CreateJsonRequest(HttpMethod.Post, "work/index/files", printer.CloudAccessToken, body);
         using var response = await _httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
-        response.EnsureSuccessStatusCode();
+        await EnsureSuccessAsync(response, cancellationToken).ConfigureAwait(false);
 
         await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
         using var document = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken).ConfigureAwait(false);
@@ -108,7 +147,7 @@ public sealed class AnycubicCloudClient : IPrinterTransport
 
         if (string.IsNullOrWhiteSpace(printer.CloudAccessToken))
         {
-            throw new InvalidOperationException("Cloud deletion requires a Slicer cloud token.");
+            throw new InvalidOperationException("Cloud deletion requires a Slicer cloud token import.");
         }
 
         var fileId = file.RemoteId ?? file.FileName;
@@ -122,32 +161,63 @@ public sealed class AnycubicCloudClient : IPrinterTransport
 
         using var request = CreateJsonRequest(HttpMethod.Post, "work/index/delFiles", printer.CloudAccessToken, body);
         using var response = await _httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
-        response.EnsureSuccessStatusCode();
+        await EnsureSuccessAsync(response, cancellationToken).ConfigureAwait(false);
     }
 
-    private static HttpRequestMessage CreateRequest(HttpMethod method, string path, string accessToken)
+    private static HttpRequestMessage CreateRequest(HttpMethod method, string path, string? sessionToken)
     {
         var request = new HttpRequestMessage(method, path);
-        AddAuthHeaders(request, accessToken);
+        AddSignedHeaders(request, sessionToken);
         return request;
     }
 
-    private static HttpRequestMessage CreateJsonRequest(HttpMethod method, string path, string accessToken, object body)
+    private static HttpRequestMessage CreateJsonRequest(HttpMethod method, string path, string? sessionToken, object body)
     {
-        var request = CreateRequest(method, path, accessToken);
+        var request = CreateRequest(method, path, sessionToken);
         var json = JsonSerializer.Serialize(body);
         request.Content = new StringContent(json, Encoding.UTF8, "application/json");
         return request;
     }
 
-    private static void AddAuthHeaders(HttpRequestMessage request, string accessToken)
+    private static void AddSignedHeaders(HttpRequestMessage request, string? sessionToken)
     {
-        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
-        request.Headers.TryAddWithoutValidation("XX-Token", accessToken);
-        request.Headers.TryAddWithoutValidation("XX-LANGUAGE", CultureInfo.CurrentUICulture.Name.Replace('-', '_'));
+        var nonce = Guid.NewGuid().ToString();
+        var timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds().ToString(CultureInfo.InvariantCulture);
+        var signatureInput = $"{AppId}{timestamp}{SlicerVersion}{AppSecret}{nonce}{AppId}";
+        var signature = Convert.ToHexString(MD5.HashData(Encoding.UTF8.GetBytes(signatureInput))).ToLowerInvariant();
+
+        request.Headers.TryAddWithoutValidation("Xx-Device-Type", DeviceType);
+        request.Headers.TryAddWithoutValidation("Xx-Is-Cn", "1");
+        request.Headers.TryAddWithoutValidation("Xx-Nonce", nonce);
+        request.Headers.TryAddWithoutValidation("Xx-Signature", signature);
+        request.Headers.TryAddWithoutValidation("Xx-Timestamp", timestamp);
+        request.Headers.TryAddWithoutValidation("Xx-Version", SlicerVersion);
+        request.Headers.TryAddWithoutValidation("XX-LANGUAGE", "US");
+        request.Headers.UserAgent.Add(new ProductInfoHeaderValue("KobraCache", "0.2.0"));
+
+        if (!string.IsNullOrWhiteSpace(sessionToken))
+        {
+            request.Headers.TryAddWithoutValidation("XX-Token", sessionToken);
+        }
     }
 
-    private static PrinterIdentity? ToPrinter(JsonElement item, string accessToken)
+    private static async Task EnsureSuccessAsync(HttpResponseMessage response, CancellationToken cancellationToken)
+    {
+        if (response.IsSuccessStatusCode)
+        {
+            return;
+        }
+
+        var body = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+        if (body.Length > 500)
+        {
+            body = body[..500] + "...";
+        }
+
+        throw new HttpRequestException($"Anycubic cloud request failed: {(int)response.StatusCode} {response.ReasonPhrase}. {body}");
+    }
+
+    private static PrinterIdentity? ToPrinter(JsonElement item, string sessionToken)
     {
         var id = GetString(item, "id") ?? GetString(item, "printer_id") ?? GetString(item, "device_id");
         var key = GetString(item, "key") ?? GetString(item, "nonce");
@@ -166,7 +236,7 @@ public sealed class AnycubicCloudClient : IPrinterTransport
             Key = $"cloud:{FirstNonBlank(id, key, name)}",
             CloudPrinterId = id,
             CloudKey = key,
-            CloudAccessToken = accessToken,
+            CloudAccessToken = sessionToken,
             DisplayName = name,
             ModelName = model,
             IpAddress = ip,
@@ -178,6 +248,7 @@ public sealed class AnycubicCloudClient : IPrinterTransport
     private static PrinterCacheFile? ToFile(string printerKey, StorageTarget target, JsonElement item)
     {
         var name = GetString(item, "filename")
+            ?? GetString(item, "old_filename")
             ?? GetString(item, "file_name")
             ?? GetString(item, "gcode_name")
             ?? GetString(item, "name");
@@ -195,7 +266,7 @@ public sealed class AnycubicCloudClient : IPrinterTransport
             FileName = name,
             RemoteId = GetString(item, "file_id") ?? GetString(item, "fileID") ?? GetString(item, "id"),
             SizeBytes = GetLong(item, "filesize") ?? GetLong(item, "file_size") ?? GetLong(item, "size"),
-            CreatedAt = GetDate(item, "create_time") ?? GetDate(item, "created_at"),
+            CreatedAt = GetDate(item, "time") ?? GetDate(item, "create_time") ?? GetDate(item, "created_at"),
             ModifiedAt = GetDate(item, "update_time") ?? GetDate(item, "updated_at") ?? GetDate(item, "last_update_time"),
             IsCurrentJob = GetBool(item, "is_printing") ?? false
         };
@@ -246,7 +317,7 @@ public sealed class AnycubicCloudClient : IPrinterTransport
     {
         if (root.ValueKind == JsonValueKind.Object)
         {
-            foreach (var propertyName in new[] { "data", "list", "records", "files", "file_info", "printers" })
+            foreach (var propertyName in new[] { "data", "list", "records", "rows", "files", "file_info", "printers" })
             {
                 if (root.TryGetProperty(propertyName, out var child))
                 {
@@ -278,6 +349,7 @@ public sealed class AnycubicCloudClient : IPrinterTransport
     {
         return GetString(item, "id") is not null ||
                GetString(item, "filename") is not null ||
+               GetString(item, "old_filename") is not null ||
                GetString(item, "name") is not null ||
                GetString(item, "printer_id") is not null;
     }
@@ -289,17 +361,21 @@ public sealed class AnycubicCloudClient : IPrinterTransport
             : null;
     }
 
-    private static string? GetString(JsonElement item, string propertyName)
+    private static string? GetString(JsonElement item, params string[] path)
     {
-        if (item.ValueKind != JsonValueKind.Object || !item.TryGetProperty(propertyName, out var value))
+        var current = item;
+        foreach (var propertyName in path)
         {
-            return null;
+            if (current.ValueKind != JsonValueKind.Object || !current.TryGetProperty(propertyName, out current))
+            {
+                return null;
+            }
         }
 
-        return value.ValueKind switch
+        return current.ValueKind switch
         {
-            JsonValueKind.String => value.GetString(),
-            JsonValueKind.Number => value.GetRawText(),
+            JsonValueKind.String => current.GetString(),
+            JsonValueKind.Number => current.GetRawText(),
             JsonValueKind.True => "true",
             JsonValueKind.False => "false",
             _ => null
@@ -324,7 +400,7 @@ public sealed class AnycubicCloudClient : IPrinterTransport
 
         if (long.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out var numeric))
         {
-            return numeric > 1;
+            return numeric > 0;
         }
 
         return null;
