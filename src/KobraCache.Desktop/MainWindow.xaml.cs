@@ -1,9 +1,13 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.Diagnostics;
 using System.Globalization;
+using System.Drawing;
 using System.Net.Sockets;
 using System.Windows;
 using System.Windows.Controls;
+using Forms = System.Windows.Forms;
+using MessageBox = System.Windows.MessageBox;
 using KobraCache.Core.Cloud;
 using KobraCache.Core.Models;
 using KobraCache.Core.Services;
@@ -22,6 +26,7 @@ public partial class MainWindow : Window
     private readonly RetentionFilter _retentionFilter = new();
     private readonly AnycubicCloudClient _cloudClient = new();
     private readonly LanMqttPrinterClient _lanClient = new();
+    private Forms.NotifyIcon? _trayIcon;
     private AppSettings _settings = new();
     private bool _isLoaded;
 
@@ -31,6 +36,8 @@ public partial class MainWindow : Window
         DataContext = this;
         Loaded += MainWindow_Loaded;
         Closing += MainWindow_Closing;
+        InitializeTrayIcon();
+        AppLogger.Info("MainWindow initialized.");
     }
 
     public ObservableCollection<PrinterRow> Printers => _printers;
@@ -50,7 +57,10 @@ public partial class MainWindow : Window
 
     private async void MainWindow_Closing(object? sender, CancelEventArgs e)
     {
+        AppLogger.Info("Main window closing.");
         await SaveSettingsAsync();
+        _trayIcon?.Dispose();
+        _trayIcon = null;
     }
 
     private async void AddManualIp_Click(object sender, RoutedEventArgs e)
@@ -137,7 +147,10 @@ public partial class MainWindow : Window
 
     private void RetentionComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        CustomCutoffDatePicker.IsEnabled = GetRetentionPreset() == RetentionPreset.CustomDate;
+        if (CustomCutoffDatePicker is not null)
+        {
+            CustomCutoffDatePicker.IsEnabled = GetRetentionPreset() == RetentionPreset.CustomDate;
+        }
     }
 
     private async void Preview_Click(object sender, RoutedEventArgs e)
@@ -148,6 +161,11 @@ public partial class MainWindow : Window
     private async void DeleteSelected_Click(object sender, RoutedEventArgs e)
     {
         await RunUiTaskAsync(DeleteSelectedFilesAsync);
+    }
+
+    private void OpenLogs_Click(object sender, RoutedEventArgs e)
+    {
+        AppLogger.OpenLogDirectory();
     }
 
     private async Task LoadSettingsAsync()
@@ -396,6 +414,55 @@ public partial class MainWindow : Window
         return connectTask.IsCompletedSuccessfully ? PrinterRuntimeStatus.Unknown : PrinterRuntimeStatus.Offline;
     }
 
+    private void InitializeTrayIcon()
+    {
+        try
+        {
+            var menu = new Forms.ContextMenuStrip();
+            menu.Items.Add("Show KobraCache", null, (_, _) => Dispatcher.Invoke(ShowFromTray));
+            menu.Items.Add("Open Logs", null, (_, _) => Dispatcher.Invoke(AppLogger.OpenLogDirectory));
+            menu.Items.Add(new Forms.ToolStripSeparator());
+            menu.Items.Add("Exit", null, (_, _) => Dispatcher.Invoke(Close));
+
+            _trayIcon = new Forms.NotifyIcon
+            {
+                Text = "KobraCache",
+                Icon = LoadTrayIcon(),
+                Visible = true,
+                ContextMenuStrip = menu
+            };
+            _trayIcon.DoubleClick += (_, _) => Dispatcher.Invoke(ShowFromTray);
+            AppLogger.Info("Tray icon initialized.");
+        }
+        catch (Exception ex)
+        {
+            AppLogger.Error("Tray icon initialization failed.", ex);
+        }
+    }
+
+    private void ShowFromTray()
+    {
+        Show();
+        if (WindowState == WindowState.Minimized)
+        {
+            WindowState = WindowState.Normal;
+        }
+
+        Activate();
+    }
+
+    private static Icon LoadTrayIcon()
+    {
+        var resource = System.Windows.Application.GetResourceStream(new Uri("pack://application:,,,/Assets/KobraCache.ico", UriKind.Absolute));
+        if (resource?.Stream is null)
+        {
+            return (Icon)SystemIcons.Application.Clone();
+        }
+
+        using var icon = new Icon(resource.Stream);
+        return (Icon)icon.Clone();
+    }
+
     private void UpsertPrinter(PrinterIdentity printer)
     {
         var existing = _printers.FirstOrDefault(row => SamePrinter(row.Printer, printer));
@@ -504,11 +571,13 @@ public partial class MainWindow : Window
         }
         catch (ArgumentException ex)
         {
+            AppLogger.Warn(ex.Message);
             SetStatus(ex.Message);
             MessageBox.Show(this, ex.Message, "KobraCache", MessageBoxButton.OK, MessageBoxImage.Information);
         }
         catch (Exception ex)
         {
+            AppLogger.Error("UI action failed.", ex);
             SetStatus(ex.Message);
             MessageBox.Show(this, ex.Message, "KobraCache", MessageBoxButton.OK, MessageBoxImage.Error);
         }
@@ -525,6 +594,7 @@ public partial class MainWindow : Window
 
     private void SetStatus(string message)
     {
+        AppLogger.Info(message);
         HeaderStatusText.Text = message;
         FooterStatusText.Text = message;
     }

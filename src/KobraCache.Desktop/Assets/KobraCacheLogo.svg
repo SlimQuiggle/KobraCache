@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="KobraCache logo">
+  <rect width="256" height="256" fill="none"/>
+  <g fill="none" stroke="#111827" stroke-width="10" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M46 174h164v42H46z"/>
+    <path d="M64 174V88h152v86"/>
+    <path d="M82 104h116v56H82z"/>
+    <path d="M94 132h104"/>
+    <path d="M98 216h60"/>
+    <path d="M86 72h78"/>
+    <path d="M125 72v26"/>
+    <path d="M112 98h28"/>
+    <path d="M128 126c-20 11-28 31-13 45 15 14 46 11 60-5"/>
+    <path d="M128 126c20 12 29 31 12 43-14 10-38 6-55-4"/>
+    <path d="M128 126V84"/>
+    <path d="M128 84c-15-8-25-20-27-34 8-14 25-17 42-7 15-10 33-8 43 7-4 15-17 27-34 34"/>
+    <path d="M152 84c-9 9-33 9-42 0"/>
+    <path d="M101 50c10 5 19 11 27 20"/>
+    <path d="M186 50c-11 6-21 13-29 21"/>
+  </g>
+  <g fill="#111827">
+    <circle cx="123" cy="58" r="4"/>
+    <circle cx="154" cy="58" r="4"/>
+  </g>
+  <g fill="none" stroke="#0E7490" stroke-width="8" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M110 84c10 7 33 7 45 0"/>
+    <path d="M114 170c19 7 44 3 61-14"/>
+  </g>
+</svg>

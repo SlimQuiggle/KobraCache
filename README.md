@@ -13,6 +13,8 @@ KobraCache is a Windows desktop utility for clearing old Anycubic Kobra S1 print
 - Delete blocking unless the selected printer is confirmed idle.
 - Current or active print files are never eligible.
 - Files without a reliable date are excluded from automatic retention selection and must be selected manually.
+- Startup and runtime logs under `%LOCALAPPDATA%\KobraCache\Logs`.
+- Kobra line-art logo as the window icon, in-app logo, tray icon, and executable icon.
 
 ## Important Limits
 
@@ -21,6 +23,24 @@ Manual IP entry does not provide delete credentials by itself. A manually entere
 KobraCache does not persist Anycubic cloud tokens. Cloud tokens are read from Slicer only during the explicit import action and kept in memory for the current app session.
 
 Cloud API paths are implemented from public behavior references and should be validated against a live logged-in Slicer account before using cloud deletion broadly.
+
+## Logs
+
+KobraCache writes diagnostic logs to:
+
+```text
+%LOCALAPPDATA%\KobraCache\Logs
+```
+
+The app has an `Open Logs` button and the tray icon has an `Open Logs` menu item. Logs include startup, window initialization, major UI actions, caught UI errors, and unhandled exceptions. Slicer cloud tokens are redacted and are not persisted by the app.
+
+## Icon Assets
+
+The source logo is `src\KobraCache.Desktop\Assets\KobraCacheLogo.svg`. Regenerate the PNG and ICO with Python and Pillow:
+
+```powershell
+python tools\generate_logo_assets.py
+```
 
 ## Build
 
