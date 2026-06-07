@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.4.0 - 2026-06-07
+
+- Added a `Created by Flex3Designs` credit in the bottom-right footer.
+- Removed retention/date controls from the desktop workflow.
+- Changed file loading actions from `Preview` / `Preview Files` to prominent `View Files` buttons.
+- Added `Select All` for loaded deletable files.
+- Changed storage defaults to Local cache on, USB and Cloud off.
+- Refreshed the color palette and action button styling.
+
 ## 0.3.0 - 2026-06-06
 
 - Fixed cloud status mapping so Anycubic `available=1` / `is_printing=1` reports as idle instead of busy.

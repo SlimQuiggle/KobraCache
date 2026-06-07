@@ -1,7 +1,6 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Diagnostics;
-using System.Globalization;
 using System.Drawing;
 using System.Windows;
 using System.Windows.Controls;
@@ -22,7 +21,6 @@ public partial class MainWindow : Window
     private readonly AppSettingsService _settingsService = new();
     private readonly ManualPrinterService _manualPrinterService = new();
     private readonly SlicerConfigImporter _slicerImporter = new();
-    private readonly RetentionFilter _retentionFilter = new();
     private readonly AnycubicCloudClient _cloudClient = new();
     private readonly LanMqttPrinterClient _lanClient = new();
     private Forms.NotifyIcon? _trayIcon;
@@ -154,7 +152,7 @@ public partial class MainWindow : Window
 
     private async void PreviewSelectedPrinter_Click(object sender, RoutedEventArgs e)
     {
-        await RunUiTaskAsync(PreviewSelectedPrinterAsync);
+        await RunUiTaskAsync(ViewSelectedPrinterFilesAsync);
     }
 
     private async void RemoveSelectedPrinter_Click(object sender, RoutedEventArgs e)
@@ -170,9 +168,8 @@ public partial class MainWindow : Window
 
             var name = selected.Name;
             _printers.Remove(selected);
-            _filePreviewRows.Clear();
-            DeleteSelectedButton.IsEnabled = false;
-            PreviewSummaryText.Text = "No preview loaded";
+            ClearFilePreviewRows();
+            PreviewSummaryText.Text = "No files loaded";
             RefreshSelectedPrinterDetails();
             await SaveSettingsAsync();
             SetStatus($"Removed {name}.");
@@ -181,23 +178,35 @@ public partial class MainWindow : Window
 
     private void PrintersGrid_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        _filePreviewRows.Clear();
-        DeleteSelectedButton.IsEnabled = false;
-        PreviewSummaryText.Text = "No preview loaded";
+        ClearFilePreviewRows();
+        PreviewSummaryText.Text = "No files loaded";
         RefreshSelectedPrinterDetails();
-    }
-
-    private void RetentionComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
-    {
-        if (CustomCutoffDatePicker is not null)
-        {
-            CustomCutoffDatePicker.IsEnabled = GetRetentionPreset() == RetentionPreset.CustomDate;
-        }
     }
 
     private async void Preview_Click(object sender, RoutedEventArgs e)
     {
-        await RunUiTaskAsync(PreviewSelectedPrinterAsync);
+        await RunUiTaskAsync(ViewSelectedPrinterFilesAsync);
+    }
+
+    private void SelectAllFiles_Click(object sender, RoutedEventArgs e)
+    {
+        var selectedCount = 0;
+        foreach (var row in _filePreviewRows)
+        {
+            if (!row.CanDeleteWhenSelected)
+            {
+                row.IsSelected = false;
+                continue;
+            }
+
+            row.IsSelected = true;
+            selectedCount++;
+        }
+
+        UpdateDeleteButtonState();
+        SetStatus(selectedCount == 0
+            ? "No deletable files are loaded."
+            : $"Selected {selectedCount} file(s).");
     }
 
     private async void DeleteSelected_Click(object sender, RoutedEventArgs e)
@@ -213,11 +222,10 @@ public partial class MainWindow : Window
     private async Task LoadSettingsAsync()
     {
         _settings = await _settingsService.LoadAsync();
-        LocalTargetCheckBox.IsChecked = _settings.IncludeLocalCache;
-        UsbTargetCheckBox.IsChecked = _settings.IncludeUsb;
-        CloudTargetCheckBox.IsChecked = _settings.IncludeCloud;
-        CustomCutoffDatePicker.SelectedDate = (_settings.CustomCutoffDate ?? DateOnly.FromDateTime(DateTime.Today.AddDays(-30))).ToDateTime(TimeOnly.MinValue);
-        SelectRetentionPreset(_settings.RetentionPreset);
+        var useNewStorageDefaults = _settings.StorageTargetDefaultsVersion == 0;
+        LocalTargetCheckBox.IsChecked = useNewStorageDefaults || _settings.IncludeLocalCache;
+        UsbTargetCheckBox.IsChecked = !useNewStorageDefaults && _settings.IncludeUsb;
+        CloudTargetCheckBox.IsChecked = !useNewStorageDefaults && _settings.IncludeCloud;
 
         foreach (var ipAddress in _settings.ManualIpAddresses.Distinct(StringComparer.OrdinalIgnoreCase))
         {
@@ -247,8 +255,7 @@ public partial class MainWindow : Window
         _settings = new AppSettings
         {
             ManualIpAddresses = manualIps,
-            RetentionPreset = GetRetentionPreset(),
-            CustomCutoffDate = CustomCutoffDatePicker.SelectedDate is { } date ? DateOnly.FromDateTime(date) : null,
+            StorageTargetDefaultsVersion = 1,
             IncludeLocalCache = LocalTargetCheckBox.IsChecked == true,
             IncludeUsb = UsbTargetCheckBox.IsChecked == true,
             IncludeCloud = CloudTargetCheckBox.IsChecked == true
@@ -257,7 +264,7 @@ public partial class MainWindow : Window
         await _settingsService.SaveAsync(_settings);
     }
 
-    private async Task PreviewSelectedPrinterAsync()
+    private async Task ViewSelectedPrinterFilesAsync()
     {
         var selected = GetSelectedPrinterRow();
         if (selected is null)
@@ -268,17 +275,16 @@ public partial class MainWindow : Window
 
         selected.Status = await ResolveStatusAsync(selected.Printer);
         var loadResult = await LoadFilesAsync(selected.Printer);
-        var policy = GetRetentionPolicy();
-        var preview = _retentionFilter.CreatePreview(selected.Printer, selected.Status, loadResult.Files, policy);
+        var items = BuildFileItems(loadResult.Files);
 
-        _filePreviewRows.Clear();
-        foreach (var item in preview.Items)
+        ClearFilePreviewRows();
+        foreach (var item in items)
         {
-            _filePreviewRows.Add(new FilePreviewRow(item));
+            AddFilePreviewRow(item);
         }
 
-        DeleteSelectedButton.IsEnabled = _filePreviewRows.Any(row => row.IsSelected && row.CanDeleteWhenSelected);
-        var summary = BuildPreviewSummary(preview);
+        UpdateDeleteButtonState();
+        var summary = BuildFileSummary(items);
         PreviewSummaryText.Text = loadResult.Messages.Count > 0
             ? $"{summary}. {string.Join(" ", loadResult.Messages)}"
             : summary;
@@ -345,7 +351,7 @@ public partial class MainWindow : Window
             }
         }
 
-        await PreviewSelectedPrinterAsync();
+        await ViewSelectedPrinterFilesAsync();
         if (failures.Count == 0)
         {
             SetStatus($"Deleted {selectedRows.Length} file(s), then refreshed the file list.");
@@ -362,6 +368,13 @@ public partial class MainWindow : Window
         var files = new List<PrinterCacheFile>();
         var messages = new List<string>();
         var skippedTargets = new List<string>();
+        if (LocalTargetCheckBox.IsChecked != true &&
+            UsbTargetCheckBox.IsChecked != true &&
+            CloudTargetCheckBox.IsChecked != true)
+        {
+            messages.Add("Select at least one storage target.");
+            return new FileLoadResult(files, messages);
+        }
 
         if (LocalTargetCheckBox.IsChecked == true)
         {
@@ -577,46 +590,54 @@ public partial class MainWindow : Window
         SelectedPrinterDetailText.Text = selected.DetailText;
     }
 
-    private RetentionPolicy GetRetentionPolicy()
+    private void AddFilePreviewRow(DeletePreviewItem item)
     {
-        return new RetentionPolicy
-        {
-            Preset = GetRetentionPreset(),
-            CustomCutoffDate = CustomCutoffDatePicker.SelectedDate is { } date ? DateOnly.FromDateTime(date) : null,
-            IncludeUndatedManualSelections = true
-        };
+        var row = new FilePreviewRow(item);
+        row.PropertyChanged += FilePreviewRow_PropertyChanged;
+        _filePreviewRows.Add(row);
     }
 
-    private RetentionPreset GetRetentionPreset()
+    private void ClearFilePreviewRows()
     {
-        if (RetentionComboBox.SelectedItem is ComboBoxItem item &&
-            Enum.TryParse<RetentionPreset>(item.Tag?.ToString(), out var preset))
+        foreach (var row in _filePreviewRows)
         {
-            return preset;
+            row.PropertyChanged -= FilePreviewRow_PropertyChanged;
         }
 
-        return RetentionPreset.Days30;
+        _filePreviewRows.Clear();
+        UpdateDeleteButtonState();
     }
 
-    private void SelectRetentionPreset(RetentionPreset preset)
+    private void FilePreviewRow_PropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        foreach (var item in RetentionComboBox.Items.OfType<ComboBoxItem>())
+        if (e.PropertyName == nameof(FilePreviewRow.IsSelected))
         {
-            if (Enum.TryParse<RetentionPreset>(item.Tag?.ToString(), out var candidate) && candidate == preset)
-            {
-                RetentionComboBox.SelectedItem = item;
-                return;
-            }
+            UpdateDeleteButtonState();
         }
-
-        RetentionComboBox.SelectedIndex = 0;
     }
 
-    private static string BuildPreviewSummary(DeletePreview preview)
+    private void UpdateDeleteButtonState()
     {
-        var selectedBytes = FormatBytes(preview.EligibleBytes);
-        var cutoff = preview.Cutoff.LocalDateTime.ToString("d", CultureInfo.CurrentCulture);
-        return $"{preview.Items.Count} file(s), {preview.EligibleCount} selected by retention, {selectedBytes}, cutoff {cutoff}";
+        DeleteSelectedButton.IsEnabled = _filePreviewRows.Any(row => row.IsSelected && row.CanDeleteWhenSelected);
+    }
+
+    private static IReadOnlyList<DeletePreviewItem> BuildFileItems(IEnumerable<PrinterCacheFile> files)
+    {
+        return files
+            .OrderBy(file => file.StorageTarget)
+            .ThenBy(file => file.Path, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(file => file.FileName, StringComparer.OrdinalIgnoreCase)
+            .Select(file => file.IsCurrentJob
+                ? new DeletePreviewItem(file, false, "Current or active print file.")
+                : new DeletePreviewItem(file, true, "Ready."))
+            .ToArray();
+    }
+
+    private static string BuildFileSummary(IReadOnlyList<DeletePreviewItem> items)
+    {
+        var selectableCount = items.Count(item => item.IsEligible);
+        var totalBytes = items.Sum(item => item.File.SizeBytes ?? 0);
+        return $"{items.Count} file(s) loaded, {selectableCount} selectable, {FormatBytes(totalBytes)} total";
     }
 
     private async Task RunUiTaskAsync(Func<Task> task)

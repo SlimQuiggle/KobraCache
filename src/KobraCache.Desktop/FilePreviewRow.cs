@@ -12,7 +12,7 @@ public sealed class FilePreviewRow : INotifyPropertyChanged
     public FilePreviewRow(DeletePreviewItem item)
     {
         Item = item;
-        _isSelected = item.IsEligible;
+        _isSelected = false;
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;
@@ -34,8 +34,6 @@ public sealed class FilePreviewRow : INotifyPropertyChanged
 
     public bool IsEligible => Item.IsEligible;
 
-    public bool CanManualDelete => Item.Reason.Equals("No reliable file date.", StringComparison.OrdinalIgnoreCase);
-
     public string StorageTargetText => Item.File.StorageTarget switch
     {
         StorageTarget.LocalCache => "Local",
@@ -50,9 +48,9 @@ public sealed class FilePreviewRow : INotifyPropertyChanged
 
     public string SizeText => Item.File.SizeBytes is { } bytes ? FormatBytes(bytes) : "";
 
-    public string EligibilityText => Item.IsEligible ? "Eligible" : Item.Reason;
+    public string EligibilityText => Item.IsEligible ? "Ready" : Item.Reason;
 
-    public bool CanDeleteWhenSelected => IsEligible || CanManualDelete;
+    public bool CanDeleteWhenSelected => IsEligible;
 
     private static string FormatBytes(long bytes)
     {

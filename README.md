@@ -8,11 +8,11 @@ KobraCache is a Windows desktop utility for clearing old Anycubic Kobra S1 print
 - Anycubic Slicer Next LAN import from `%APPDATA%\AnycubicSlicerNext\AnycubicSlicerNext.conf`.
 - Anycubic Slicer Next cloud import after explicit opt-in.
 - Separate cleanup targets for local printer cache, USB storage, and cloud files.
-- Retention presets for 30, 60, 90, or custom cutoff dates.
-- Preview-before-delete and a second confirmation before deletion.
+- Local cache selected by default, with USB and Cloud opt-in per view.
+- View-before-delete and a second confirmation before deletion.
+- Manual file selection with a `Select All` action for loaded deletable files.
 - Delete blocking unless the selected printer is confirmed idle.
 - Current or active print files are never eligible.
-- Files without a reliable date are excluded from automatic retention selection and must be selected manually.
 - Startup and runtime logs under `%LOCALAPPDATA%\KobraCache\Logs`.
 - Kobra line-art logo as the window icon, in-app logo, tray icon, and executable icon.
 
@@ -24,7 +24,7 @@ KobraCache does not persist Anycubic cloud tokens. Cloud tokens are read from Sl
 
 Cloud REST and MQTT paths are implemented from public behavior references and should be validated against a live logged-in Slicer account before using deletion broadly.
 
-Printer IPs are identifiers, not credentials. If a printer is only added by IP, KobraCache cannot list or delete files from it. Import Slicer Cloud or Slicer LAN credentials, then use the imported or matched printer row and click `Preview Files`.
+Printer IPs are identifiers, not credentials. If a printer is only added by IP, KobraCache cannot list or delete files from it. Import Slicer Cloud or Slicer LAN credentials, then use the imported or matched printer row and click `View Files`.
 
 Cloud-mode printer-local cache and USB listing use Anycubic cloud MQTT after a Slicer Cloud import. KobraCache lists cloud account files through the REST API, and it lists/deletes printer-local cache or USB files through LAN MQTT when LAN credentials are available or through cloud MQTT when cloud printer command metadata is available.
 
