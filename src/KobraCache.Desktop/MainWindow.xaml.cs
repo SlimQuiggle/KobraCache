@@ -190,23 +190,27 @@ public partial class MainWindow : Window
 
     private void SelectAllFiles_Click(object sender, RoutedEventArgs e)
     {
-        var selectedCount = 0;
-        foreach (var row in _filePreviewRows)
-        {
-            if (!row.CanDeleteWhenSelected)
-            {
-                row.IsSelected = false;
-                continue;
-            }
+        var selectableRows = _filePreviewRows
+            .Where(row => row.CanDeleteWhenSelected)
+            .ToArray();
 
-            row.IsSelected = true;
-            selectedCount++;
+        if (selectableRows.Length == 0)
+        {
+            UpdateDeleteButtonState();
+            SetStatus("No deletable files are loaded.");
+            return;
+        }
+
+        var clearAll = selectableRows.All(row => row.IsSelected);
+        foreach (var row in selectableRows)
+        {
+            row.IsSelected = !clearAll;
         }
 
         UpdateDeleteButtonState();
-        SetStatus(selectedCount == 0
-            ? "No deletable files are loaded."
-            : $"Selected {selectedCount} file(s).");
+        SetStatus(clearAll
+            ? $"Cleared {selectableRows.Length} file selection(s)."
+            : $"Selected {selectableRows.Length} file(s).");
     }
 
     private async void DeleteSelected_Click(object sender, RoutedEventArgs e)
@@ -618,7 +622,12 @@ public partial class MainWindow : Window
 
     private void UpdateDeleteButtonState()
     {
-        DeleteSelectedButton.IsEnabled = _filePreviewRows.Any(row => row.IsSelected && row.CanDeleteWhenSelected);
+        var selectableRows = _filePreviewRows.Where(row => row.CanDeleteWhenSelected).ToArray();
+        var hasSelected = selectableRows.Any(row => row.IsSelected);
+        DeleteSelectedButton.IsEnabled = hasSelected;
+        SelectAllButton.Content = selectableRows.Length > 0 && selectableRows.All(row => row.IsSelected)
+            ? "Clear All"
+            : "Select All";
     }
 
     private static IReadOnlyList<DeletePreviewItem> BuildFileItems(IEnumerable<PrinterCacheFile> files)

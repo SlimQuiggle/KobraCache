@@ -14,7 +14,7 @@ public sealed class AnycubicCloudClient : IPrinterTransport
     private const string AppId = "f9b3528877c94d5c9c5af32245db46ef";
     private const string AppSecret = "0cf75926606049a3937f56b0373b99fb";
     private const string SlicerVersion = "V3.0.0";
-    private const string ClientVersion = "0.4.0";
+    private const string ClientVersion = "0.4.1";
     private const string DeviceType = "pcf";
     private static readonly TimeSpan DefaultCloudMqttTimeout = TimeSpan.FromSeconds(20);
     private readonly HttpClient _httpClient;

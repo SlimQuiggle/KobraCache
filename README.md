@@ -10,7 +10,7 @@ KobraCache is a Windows desktop utility for clearing old Anycubic Kobra S1 print
 - Separate cleanup targets for local printer cache, USB storage, and cloud files.
 - Local cache selected by default, with USB and Cloud opt-in per view.
 - View-before-delete and a second confirmation before deletion.
-- Manual file selection with a `Select All` action for loaded deletable files.
+- Manual file selection with a `Select All` / `Clear All` toggle for loaded deletable files.
 - Delete blocking unless the selected printer is confirmed idle.
 - Current or active print files are never eligible.
 - Startup and runtime logs under `%LOCALAPPDATA%\KobraCache\Logs`.

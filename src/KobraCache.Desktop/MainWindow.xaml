@@ -88,7 +88,7 @@
                     <Image Source="Assets/KobraCacheLogo.png" Width="44" Height="44" Margin="0,0,10,0" />
                     <StackPanel VerticalAlignment="Center">
                         <TextBlock Text="KobraCache" FontSize="28" FontWeight="SemiBold" Foreground="#0F172A" />
-                        <TextBlock x:Name="VersionText" Text="v0.4.0" Foreground="#0F766E" FontWeight="SemiBold" />
+                        <TextBlock x:Name="VersionText" Text="v0.4.1" Foreground="#0F766E" FontWeight="SemiBold" />
                     </StackPanel>
                 </StackPanel>
                 <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
@@ -192,13 +192,21 @@
                             <CheckBox x:Name="CloudTargetCheckBox" Content="Cloud" IsChecked="False" />
                         </StackPanel>
 
-                        <Button Grid.Column="2" Content="Select All" Style="{StaticResource BlueButton}" Click="SelectAllFiles_Click" />
+                        <Button x:Name="SelectAllButton" Grid.Column="2" Content="Select All" Style="{StaticResource BlueButton}" Click="SelectAllFiles_Click" />
                         <Button Grid.Column="4" Content="View Files" Style="{StaticResource PrimaryButton}" Click="Preview_Click" />
                     </Grid>
 
                     <DataGrid x:Name="FilesGrid" Grid.Row="1" ItemsSource="{Binding FilePreviewRows}">
                         <DataGrid.Columns>
-                            <DataGridCheckBoxColumn Header="Delete" Binding="{Binding IsSelected, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Width="64" />
+                            <DataGridTemplateColumn Header="Delete" Width="64" IsReadOnly="False">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <CheckBox HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                  IsChecked="{Binding IsSelected, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                  IsEnabled="{Binding CanDeleteWhenSelected}" />
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
                             <DataGridTextColumn Header="Storage" Binding="{Binding StorageTargetText}" Width="92" IsReadOnly="True" />
                             <DataGridTextColumn Header="File" Binding="{Binding FileName}" Width="*" IsReadOnly="True" />
                             <DataGridTextColumn Header="Date" Binding="{Binding DateText}" Width="144" IsReadOnly="True" />

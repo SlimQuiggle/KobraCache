@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.4.1 - 2026-06-07
+
+- Changed `Select All` into a toggle that clears all selectable files when everything is already selected.
+- Replaced the file grid checkbox column so delete boxes check and uncheck with a single click.
+
 ## 0.4.0 - 2026-06-07
 
 - Added a `Created by Flex3Designs` credit in the bottom-right footer.
