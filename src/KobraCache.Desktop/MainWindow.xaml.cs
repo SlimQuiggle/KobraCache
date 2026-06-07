@@ -21,6 +21,7 @@ public partial class MainWindow : Window
     private readonly AppSettingsService _settingsService = new();
     private readonly ManualPrinterService _manualPrinterService = new();
     private readonly SlicerConfigImporter _slicerImporter = new();
+    private readonly AppUpdateService _updateService = new();
     private readonly AnycubicCloudClient _cloudClient = new();
     private readonly LanMqttPrinterClient _lanClient = new();
     private Forms.NotifyIcon? _trayIcon;
@@ -221,6 +222,11 @@ public partial class MainWindow : Window
     private void OpenLogs_Click(object sender, RoutedEventArgs e)
     {
         AppLogger.OpenLogDirectory();
+    }
+
+    private async void CheckForUpdates_Click(object sender, RoutedEventArgs e)
+    {
+        await RunUiTaskAsync(CheckForUpdatesAsync);
     }
 
     private async Task LoadSettingsAsync()
@@ -450,6 +456,50 @@ public partial class MainWindow : Window
         }
 
         return new FileLoadResult(files, messages);
+    }
+
+    private async Task CheckForUpdatesAsync()
+    {
+        SetStatus("Checking GitHub for updates...");
+        var check = await _updateService.CheckForUpdatesAsync();
+        if (!check.IsUpdateAvailable || check.Release is null || check.Asset is null)
+        {
+            var latestText = check.Release is null ? "" : $" Latest release: {check.Release.TagName}.";
+            SetStatus($"KobraCache is up to date. Current version: v{AppVersion.Display}.{latestText}");
+            MessageBox.Show(
+                this,
+                $"KobraCache is up to date.{Environment.NewLine}{Environment.NewLine}Current version: v{AppVersion.Display}{latestText}",
+                "KobraCache updates",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
+            return;
+        }
+
+        var release = check.Release;
+        var asset = check.Asset;
+        var confirm = MessageBox.Show(
+            this,
+            $"KobraCache {release.TagName} is available.{Environment.NewLine}{Environment.NewLine}" +
+            $"Current version: v{AppVersion.Display}{Environment.NewLine}" +
+            $"Download: {asset.Name}{Environment.NewLine}{Environment.NewLine}" +
+            "Install it now? KobraCache will close, update itself, and relaunch.",
+            "KobraCache update available",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Question);
+
+        if (confirm != MessageBoxResult.Yes)
+        {
+            SetStatus($"Update {release.TagName} is available but was not installed.");
+            return;
+        }
+
+        SetStatus($"Downloading {release.TagName}...");
+        var prepared = await _updateService.DownloadAndPrepareAsync(release, asset);
+        _updateService.StartInstallOnExit(prepared);
+        SetStatus($"Installing {release.TagName}. KobraCache will restart.");
+        AppLogger.Info($"Update {release.TagName} prepared. Shutting down for install.");
+        await SaveSettingsAsync();
+        System.Windows.Application.Current.Shutdown();
     }
 
     private async Task DeleteFileAsync(PrinterIdentity printer, PrinterCacheFile file)

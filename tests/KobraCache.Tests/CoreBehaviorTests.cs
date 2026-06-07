@@ -6,6 +6,7 @@ using KobraCache.Core.Models;
 using KobraCache.Core.Services;
 using KobraCache.Core.Slicer;
 using KobraCache.Core.Transports;
+using KobraCache.Core.Updates;
 
 namespace KobraCache.Tests;
 
@@ -274,6 +275,53 @@ public sealed class CoreBehaviorTests
         var options = method!.Invoke(null, [new AnycubicCloudMqttSession("session-token", "123", "tester@example.invalid")]);
 
         Assert.NotNull(options);
+    }
+
+    [Fact]
+    public void GitHubReleaseClient_parses_release_and_finds_windows_asset()
+    {
+        using var document = JsonDocument.Parse("""
+        {
+          "tag_name": "v0.5.0",
+          "html_url": "https://github.com/SlimQuiggle/KobraCache/releases/tag/v0.5.0",
+          "assets": [
+            {
+              "name": "source.zip",
+              "browser_download_url": "https://example.invalid/source.zip",
+              "size": 10
+            },
+            {
+              "name": "KobraCache-v0.5.0-win-x64.zip",
+              "browser_download_url": "https://example.invalid/KobraCache-v0.5.0-win-x64.zip",
+              "size": 2048,
+              "digest": "sha256:abc123"
+            }
+          ]
+        }
+        """);
+
+        var release = GitHubReleaseClient.ParseRelease(document.RootElement);
+        var asset = GitHubReleaseClient.FindWindowsZipAsset(release);
+
+        Assert.Equal("v0.5.0", release.TagName);
+        Assert.Equal(new Version(0, 5, 0), release.Version);
+        Assert.NotNull(asset);
+        Assert.Equal("KobraCache-v0.5.0-win-x64.zip", asset!.Name);
+        Assert.Equal("sha256:abc123", asset.Digest);
+        Assert.True(GitHubReleaseClient.IsNewer(release.Version, new Version(0, 4, 1)));
+        Assert.False(GitHubReleaseClient.IsNewer(release.Version, new Version(0, 5, 0)));
+    }
+
+    [Theory]
+    [InlineData("v0.5.0", 0, 5, 0)]
+    [InlineData("0.5.1", 0, 5, 1)]
+    [InlineData("v1.2.3-beta.1", 1, 2, 3)]
+    public void GitHubReleaseClient_parses_version_tags(string tag, int major, int minor, int patch)
+    {
+        var parsed = GitHubReleaseClient.TryParseVersionTag(tag, out var version);
+
+        Assert.True(parsed);
+        Assert.Equal(new Version(major, minor, patch), version);
     }
 
     private static PrinterIdentity TestPrinter()

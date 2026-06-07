@@ -11,6 +11,7 @@ KobraCache is a Windows desktop utility for clearing old Anycubic Kobra S1 print
 - Local cache selected by default, with USB and Cloud opt-in per view.
 - View-before-delete and a second confirmation before deletion.
 - Manual file selection with a `Select All` / `Clear All` toggle for loaded deletable files.
+- GitHub release update checks and self-update from the latest Windows release zip.
 - Delete blocking unless the selected printer is confirmed idle.
 - Current or active print files are never eligible.
 - Startup and runtime logs under `%LOCALAPPDATA%\KobraCache\Logs`.
@@ -27,6 +28,8 @@ Cloud REST and MQTT paths are implemented from public behavior references and sh
 Printer IPs are identifiers, not credentials. If a printer is only added by IP, KobraCache cannot list or delete files from it. Import Slicer Cloud or Slicer LAN credentials, then use the imported or matched printer row and click `View Files`.
 
 Cloud-mode printer-local cache and USB listing use Anycubic cloud MQTT after a Slicer Cloud import. KobraCache lists cloud account files through the REST API, and it lists/deletes printer-local cache or USB files through LAN MQTT when LAN credentials are available or through cloud MQTT when cloud printer command metadata is available.
+
+Self-update downloads the latest public GitHub release asset matching `KobraCache-*-win-x64.zip`. The app stages the update under `%LOCALAPPDATA%\KobraCache\Updates`, closes, copies the new files over the current app folder, then relaunches. If the current app folder is not writable, the update will fail and details are written to `%LOCALAPPDATA%\KobraCache\Logs\updater.log`.
 
 ## Logs
 

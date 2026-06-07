@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.5.0 - 2026-06-07
+
+- Added `Check for Updates` in the app header.
+- Added GitHub release lookup against `SlimQuiggle/KobraCache`.
+- Added a self-update flow that downloads the Windows release zip, verifies GitHub's SHA256 digest when provided, stages the update, closes KobraCache, replaces app files, and relaunches.
+- Added tests for GitHub release parsing, version comparison, and Windows asset selection.
+
 ## 0.4.1 - 2026-06-07
 
 - Changed `Select All` into a toggle that clears all selectable files when everything is already selected.

@@ -88,10 +88,11 @@
                     <Image Source="Assets/KobraCacheLogo.png" Width="44" Height="44" Margin="0,0,10,0" />
                     <StackPanel VerticalAlignment="Center">
                         <TextBlock Text="KobraCache" FontSize="28" FontWeight="SemiBold" Foreground="#0F172A" />
-                        <TextBlock x:Name="VersionText" Text="v0.4.1" Foreground="#0F766E" FontWeight="SemiBold" />
+                        <TextBlock x:Name="VersionText" Text="v0.5.0" Foreground="#0F766E" FontWeight="SemiBold" />
                     </StackPanel>
                 </StackPanel>
                 <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                    <Button Content="Check for Updates" Style="{StaticResource WarmButton}" Click="CheckForUpdates_Click" />
                     <Button Content="Open Logs" Style="{StaticResource BlueButton}" Click="OpenLogs_Click" />
                     <TextBlock x:Name="HeaderStatusText" Text="Ready" VerticalAlignment="Center"
                                Foreground="#334155" TextAlignment="Right" FontWeight="SemiBold" />
