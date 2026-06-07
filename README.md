@@ -1,6 +1,6 @@
 # KobraCache
 
-KobraCache is a Windows desktop utility for clearing old Anycubic Kobra S1 print files without subnet scanning.
+KobraCache is a Windows desktop utility for clearing old Anycubic Kobra S1 and compatible Anycubic Kobra printer files without subnet scanning.
 
 ## Current Scope
 
@@ -16,6 +16,14 @@ KobraCache is a Windows desktop utility for clearing old Anycubic Kobra S1 print
 - Current or active print files are never eligible.
 - Startup and runtime logs under `%LOCALAPPDATA%\KobraCache\Logs`.
 - Kobra line-art logo as the window icon, in-app logo, tray icon, and executable icon.
+
+## Printer Compatibility
+
+KobraCache is confirmed working on the Anycubic Kobra S1. It is expected to work on other newer Anycubic Kobra printers that expose the same Slicer Next / Anycubic Cloud file-manager protocol, but those models have not all been personally tested.
+
+Likely candidates, still marked untested, include Kobra S1 Max, Kobra 3, Kobra 3 V2, Kobra 3 Max, and possibly Kobra 2 Pro units with compatible firmware. Kobra X / K4 software-base printers, older Kobra/Kobra 2 variants, and Photon/resin printers are not confirmed.
+
+See [Printer Compatibility](docs/COMPATIBILITY.md) for the current compatibility matrix and reporting notes.
 
 ## Important Limits
 

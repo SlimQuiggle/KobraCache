@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Added printer compatibility documentation for confirmed, likely, and unknown Anycubic model families.
+
 ## 0.5.0 - 2026-06-07
 
 - Added `Check for Updates` in the app header.
