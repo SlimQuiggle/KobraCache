@@ -37,6 +37,39 @@
             <Setter Property="BorderBrush" Value="#FDBA74" />
             <Setter Property="Foreground" Value="#C2410C" />
         </Style>
+        <Style x:Key="WorkflowButton" TargetType="Button" BasedOn="{StaticResource BaseButton}">
+            <Setter Property="MinHeight" Value="44" />
+            <Setter Property="Padding" Value="10,6" />
+            <Setter Property="FontWeight" Value="Bold" />
+        </Style>
+        <Style x:Key="LanImportButton" TargetType="Button" BasedOn="{StaticResource WorkflowButton}">
+            <Setter Property="Background" Value="#E0F2FE" />
+            <Setter Property="BorderBrush" Value="#38BDF8" />
+            <Setter Property="Foreground" Value="#075985" />
+        </Style>
+        <Style x:Key="CloudImportButton" TargetType="Button" BasedOn="{StaticResource WorkflowButton}">
+            <Setter Property="Background" Value="#DCFCE7" />
+            <Setter Property="BorderBrush" Value="#22C55E" />
+            <Setter Property="Foreground" Value="#166534" />
+        </Style>
+        <Style x:Key="ViewFilesButton" TargetType="Button" BasedOn="{StaticResource WorkflowButton}">
+            <Setter Property="Background" Value="#CCFBF1" />
+            <Setter Property="BorderBrush" Value="#14B8A6" />
+            <Setter Property="Foreground" Value="#0F766E" />
+        </Style>
+        <Style x:Key="StepBadge" TargetType="Border">
+            <Setter Property="Width" Value="24" />
+            <Setter Property="Height" Value="24" />
+            <Setter Property="CornerRadius" Value="12" />
+            <Setter Property="Margin" Value="0,0,8,0" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+        <Style x:Key="ButtonIcon" TargetType="Viewbox">
+            <Setter Property="Width" Value="24" />
+            <Setter Property="Height" Value="24" />
+            <Setter Property="Margin" Value="0,0,8,0" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
         <Style TargetType="TextBox">
             <Setter Property="MinHeight" Value="32" />
             <Setter Property="Padding" Value="8,4" />
@@ -88,7 +121,7 @@
                     <Image Source="Assets/KobraCacheLogo.png" Width="44" Height="44" Margin="0,0,10,0" />
                     <StackPanel VerticalAlignment="Center">
                         <TextBlock Text="KobraCache" FontSize="28" FontWeight="SemiBold" Foreground="#0F172A" />
-                        <TextBlock x:Name="VersionText" Text="v0.6.0" Foreground="#0F766E" FontWeight="SemiBold" />
+                        <TextBlock x:Name="VersionText" Text="v0.7.0" Foreground="#0F766E" FontWeight="SemiBold" />
                     </StackPanel>
                 </StackPanel>
                 <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
@@ -109,14 +142,35 @@
                     <ColumnDefinition Width="*" />
                 </Grid.ColumnDefinitions>
 
-                <TextBlock Grid.Column="0" Text="Import printers from Anycubic Slicer Next" VerticalAlignment="Center"
-                           FontWeight="SemiBold" Foreground="#0F172A" Margin="0,0,12,0" />
-                <Button Grid.Column="1" Content="Import Slicer LAN" Style="{StaticResource WarmButton}" Click="ImportSlicerLan_Click" />
-                <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" Margin="8,0,0,0">
-                    <CheckBox x:Name="CloudOptInCheckBox" Content="Allow Slicer cloud token import"
-                              VerticalAlignment="Center" Margin="0,0,8,0" />
-                    <Button Content="Import Cloud Printers" Style="{StaticResource WarmButton}" Click="ImportSlicerCloud_Click" />
+                <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,12,0">
+                    <Border Style="{StaticResource StepBadge}" Background="#0F766E">
+                        <TextBlock Text="1" Foreground="#FFFFFF" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </Border>
+                    <TextBlock Text="Import Printers" VerticalAlignment="Center" FontSize="16"
+                               FontWeight="SemiBold" Foreground="#0F172A" />
                 </StackPanel>
+                <Button Grid.Column="1" Style="{StaticResource LanImportButton}" Click="ImportSlicerLan_Click">
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                        <Viewbox Style="{StaticResource ButtonIcon}">
+                            <Canvas Width="24" Height="24">
+                                <Path Stroke="#075985" StrokeThickness="1.8" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"
+                                      Data="M4,5 L20,5 L20,14 L4,14 Z M12,14 L12,19 M8,19 L16,19 M7,9 L17,9 M10,11 L12,9 L14,11 M12,9 L12,13" />
+                            </Canvas>
+                        </Viewbox>
+                        <TextBlock Text="Import Slicer LAN" VerticalAlignment="Center" />
+                    </StackPanel>
+                </Button>
+                <Button Grid.Column="2" Style="{StaticResource CloudImportButton}" Click="ImportSlicerCloud_Click">
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                        <Viewbox Style="{StaticResource ButtonIcon}">
+                            <Canvas Width="24" Height="24">
+                                <Path Stroke="#166534" StrokeThickness="1.8" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"
+                                      Data="M7,17 L18,17 C20,17 21.5,15.5 21.5,13.5 C21.5,11.4 19.8,9.8 17.7,9.8 C17.1,7.1 14.8,5 12,5 C9.5,5 7.4,6.6 6.6,9.1 C4.3,9.4 2.5,11.2 2.5,13.5 C2.5,15.5 4.2,17 7,17 M12,8 L12,15 M9.5,12.5 L12,15 L14.5,12.5" />
+                            </Canvas>
+                        </Viewbox>
+                        <TextBlock Text="Import Cloud Printers" VerticalAlignment="Center" />
+                    </StackPanel>
+                </Button>
             </Grid>
         </Border>
 
@@ -140,9 +194,13 @@
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="Auto" />
                         </Grid.RowDefinitions>
-                        <TextBlock Grid.Row="0" Text="Printers" FontSize="16" FontWeight="SemiBold" Foreground="#0F172A" />
+                        <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center">
+                            <Border Style="{StaticResource StepBadge}" Background="#2563EB">
+                                <TextBlock Text="2" Foreground="#FFFFFF" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            </Border>
+                            <TextBlock Text="Printers" FontSize="16" FontWeight="SemiBold" Foreground="#0F172A" VerticalAlignment="Center" />
+                        </StackPanel>
                         <WrapPanel Grid.Row="1" Margin="0,8,0,0">
-                            <Button Content="View Files" Style="{StaticResource PrimaryButton}" Click="PreviewSelectedPrinter_Click" />
                             <Button Content="Refresh Status" Style="{StaticResource BlueButton}" Click="RefreshStatus_Click" />
                             <Button Content="Remove Selected" Click="RemoveSelectedPrinter_Click" />
                         </WrapPanel>
@@ -189,7 +247,20 @@
                         </StackPanel>
 
                         <Button x:Name="SelectAllButton" Grid.Column="2" Content="Select All" Style="{StaticResource BlueButton}" Click="SelectAllFiles_Click" />
-                        <Button Grid.Column="4" Content="View Files" Style="{StaticResource PrimaryButton}" Click="Preview_Click" />
+                        <Button Grid.Column="4" Style="{StaticResource ViewFilesButton}" Click="Preview_Click">
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                <Border Style="{StaticResource StepBadge}" Background="#0F766E">
+                                    <TextBlock Text="3" Foreground="#FFFFFF" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                </Border>
+                                <Viewbox Style="{StaticResource ButtonIcon}">
+                                    <Canvas Width="24" Height="24">
+                                        <Path Stroke="#0F766E" StrokeThickness="1.8" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"
+                                              Data="M6,4 L14,4 L19,9 L19,20 L6,20 Z M14,4 L14,9 L19,9 M10,14 C10,12.4 11.4,11 13,11 C14.6,11 16,12.4 16,14 C16,15.6 14.6,17 13,17 C11.4,17 10,15.6 10,14 M15.2,16.2 L17.5,18.5" />
+                                    </Canvas>
+                                </Viewbox>
+                                <TextBlock Text="View Files" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Button>
                     </Grid>
 
                     <DataGrid x:Name="FilesGrid" Grid.Row="1" ItemsSource="{Binding FilePreviewRows}">

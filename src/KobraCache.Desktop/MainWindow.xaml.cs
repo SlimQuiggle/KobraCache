@@ -83,12 +83,6 @@ public partial class MainWindow : Window
     {
         await RunUiTaskAsync(async () =>
         {
-            if (CloudOptInCheckBox.IsChecked != true)
-            {
-                MessageBox.Show(this, "Enable cloud token import first.", "KobraCache", MessageBoxButton.OK, MessageBoxImage.Information);
-                return;
-            }
-
             var import = await _slicerImporter.ImportAsync();
             if (string.IsNullOrWhiteSpace(import.CloudAccessToken))
             {
@@ -135,11 +129,6 @@ public partial class MainWindow : Window
             RefreshSelectedPrinterDetails();
             SetStatus($"{selected.Name} status: {selected.StatusText}.");
         });
-    }
-
-    private async void PreviewSelectedPrinter_Click(object sender, RoutedEventArgs e)
-    {
-        await RunUiTaskAsync(ViewSelectedPrinterFilesAsync);
     }
 
     private async void RemoveSelectedPrinter_Click(object sender, RoutedEventArgs e)

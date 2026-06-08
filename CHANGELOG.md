@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.7.0 - 2026-06-08
+
+- Removed the separate cloud-token import checkbox; clicking `Import Cloud Printers` now performs the Slicer cloud import directly.
+- Added numbered workflow labels for import, printer selection, and file viewing.
+- Added custom line-drawing icons and distinct colors for the Slicer LAN and Cloud import buttons.
+
 ## 0.6.0 - 2026-06-08
 
 - Removed manual IP-only printer entry because IP addresses do not provide file-list or delete credentials.

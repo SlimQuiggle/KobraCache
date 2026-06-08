@@ -5,7 +5,7 @@ KobraCache is a Windows desktop utility that gives Anycubic Kobra owners an easi
 ## Current Scope
 
 - Anycubic Slicer Next LAN import from `%APPDATA%\AnycubicSlicerNext\AnycubicSlicerNext.conf`.
-- Anycubic Slicer Next cloud import after explicit opt-in.
+- Anycubic Slicer Next cloud import from the `Import Cloud Printers` action.
 - Separate cleanup targets for local printer cache, USB storage, and cloud files.
 - Local cache selected by default, with USB and Cloud opt-in per view.
 - View-before-delete and a second confirmation before deletion.
