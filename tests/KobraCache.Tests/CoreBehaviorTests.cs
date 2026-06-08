@@ -1,4 +1,6 @@
 using System.Net;
+using System.Reflection;
+using System.Security.Authentication;
 using System.Text;
 using System.Text.Json;
 using KobraCache.Core.Cloud;
@@ -124,6 +126,25 @@ public sealed class CoreBehaviorTests
         Assert.Equal(StorageTarget.Usb, usbFiles.Single().StorageTarget);
         Assert.Contains(gateway.Payloads, payload => payload.Contains("\"filename\":\"local-old.gcode\"", StringComparison.Ordinal));
         Assert.Contains(gateway.Payloads, payload => payload.Contains("\"filename\":\"usb-old.gcode\"", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void LanMqttPrinterClient_allows_local_printer_tls_certificates()
+    {
+        var gatewayType = typeof(LanMqttPrinterClient).GetNestedType("MqttNetLanGateway", BindingFlags.NonPublic);
+        var buildOptions = gatewayType!.GetMethod("BuildOptions", BindingFlags.NonPublic | BindingFlags.Static);
+
+        var options = buildOptions!.Invoke(null, [TestLanPrinter()]);
+        var channelOptions = options!.GetType().GetProperty("ChannelOptions")!.GetValue(options);
+        var tlsOptions = channelOptions!.GetType().GetProperty("TlsOptions")!.GetValue(channelOptions);
+
+        Assert.NotNull(tlsOptions);
+        Assert.True((bool)tlsOptions.GetType().GetProperty("UseTls")!.GetValue(tlsOptions)!);
+        Assert.True((bool)tlsOptions.GetType().GetProperty("AllowUntrustedCertificates")!.GetValue(tlsOptions)!);
+        Assert.True((bool)tlsOptions.GetType().GetProperty("IgnoreCertificateChainErrors")!.GetValue(tlsOptions)!);
+        Assert.True((bool)tlsOptions.GetType().GetProperty("IgnoreCertificateRevocationErrors")!.GetValue(tlsOptions)!);
+        Assert.Equal(SslProtocols.Tls12, (SslProtocols)tlsOptions.GetType().GetProperty("SslProtocol")!.GetValue(tlsOptions)!);
+        Assert.NotNull(tlsOptions.GetType().GetProperty("CertificateValidationHandler")!.GetValue(tlsOptions));
     }
 
     [Fact]

@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Security.Authentication;
 using System.Text;
 using System.Text.Json;
 using KobraCache.Core.Models;
@@ -319,7 +320,6 @@ public sealed class LanMqttPrinterClient : IPrinterTransport
             TimeSpan timeout,
             CancellationToken cancellationToken = default)
         {
-            var (host, port, useTls) = ResolveBroker(printer);
             var msgId = GetPayloadMsgId(payload);
             var responseTopic = $"anycubic/anycubicCloud/v1/printer/public/{printer.ModeId}/{printer.DeviceId}/#";
             var commandTopic = $"anycubic/anycubicCloud/v1/slicer/printer/{printer.ModeId}/{printer.DeviceId}/{action}";
@@ -340,18 +340,8 @@ public sealed class LanMqttPrinterClient : IPrinterTransport
                 return Task.CompletedTask;
             };
 
-            var optionsBuilder = new MqttClientOptionsBuilder()
-                .WithClientId($"KobraCache-{Guid.NewGuid():N}")
-                .WithTcpServer(host, port)
-                .WithCredentials(printer.MqttUsername, printer.MqttPassword)
-                .WithCleanSession();
-
-            if (useTls)
-            {
-                optionsBuilder.WithTlsOptions(options => options.UseTls());
-            }
-
-            await client.ConnectAsync(optionsBuilder.Build(), cancellationToken).ConfigureAwait(false);
+            var options = BuildOptions(printer);
+            await client.ConnectAsync(options, cancellationToken).ConfigureAwait(false);
             await client.SubscribeAsync(responseTopic, MqttQualityOfServiceLevel.AtLeastOnce, cancellationToken).ConfigureAwait(false);
 
             var json = JsonSerializer.Serialize(payload);
@@ -365,6 +355,32 @@ public sealed class LanMqttPrinterClient : IPrinterTransport
             var responseText = await completion.Task.WaitAsync(timeout, cancellationToken).ConfigureAwait(false);
             await client.DisconnectAsync(cancellationToken: CancellationToken.None).ConfigureAwait(false);
             return responseText;
+        }
+
+        private static MqttClientOptions BuildOptions(PrinterIdentity printer)
+        {
+            var (host, port, useTls) = ResolveBroker(printer);
+            var optionsBuilder = new MqttClientOptionsBuilder()
+                .WithClientId($"KobraCache-{Guid.NewGuid():N}")
+                .WithTcpServer(host, port)
+                .WithCredentials(printer.MqttUsername, printer.MqttPassword)
+                .WithCleanSession();
+
+            if (useTls)
+            {
+                optionsBuilder.WithTlsOptions(options =>
+                {
+                    // Anycubic LAN brokers commonly use local printer certificates that do not chain to a public CA.
+                    options.UseTls();
+                    options.WithSslProtocols(SslProtocols.Tls12);
+                    options.WithAllowUntrustedCertificates(true);
+                    options.WithIgnoreCertificateChainErrors(true);
+                    options.WithIgnoreCertificateRevocationErrors(true);
+                    options.WithCertificateValidationHandler(_ => true);
+                });
+            }
+
+            return optionsBuilder.Build();
         }
     }
 }

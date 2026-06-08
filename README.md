@@ -34,6 +34,8 @@ Cloud REST and MQTT paths are implemented from public behavior references and sh
 
 Printer IPs are identifiers, not credentials. Use `Import Slicer LAN` or `Import Cloud Printers`, then select the imported printer row and click `View Files`.
 
+LAN MQTT accepts local printer TLS certificates because Anycubic LAN brokers can use certificates that do not chain to a public certificate authority. The LAN path still requires credentials imported from Slicer.
+
 Cloud-mode printer-local cache and USB listing use Anycubic cloud MQTT after a Slicer Cloud import. KobraCache lists cloud account files through the REST API, and it lists/deletes printer-local cache or USB files through LAN MQTT when LAN credentials are available or through cloud MQTT when cloud printer command metadata is available.
 
 Self-update downloads the latest public GitHub release asset matching `KobraCache-*-win-x64.zip`. The app stages the update under `%LOCALAPPDATA%\KobraCache\Updates`, closes, copies the new files over the current app folder, then relaunches. If the current app folder is not writable, the update will fail and details are written to `%LOCALAPPDATA%\KobraCache\Logs\updater.log`.

@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.0 - 2026-06-08
+
+- Fixed LAN MQTT connections rejecting local printer TLS certificates during file listing.
+- Added a test that verifies LAN MQTT uses the local-printer TLS certificate policy.
+
 ## 0.8.0 - 2026-06-08
 
 - Moved the step 3 marker beside the `View Files` button and changed it to orange.
