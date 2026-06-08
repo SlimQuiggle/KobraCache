@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.6.0 - Unreleased
+## 0.6.0 - 2026-06-08
 
 - Removed manual IP-only printer entry because IP addresses do not provide file-list or delete credentials.
 - Added printer compatibility documentation for confirmed, likely, and unknown Anycubic model families.
