@@ -121,7 +121,7 @@
                     <Image Source="Assets/KobraCacheLogo.png" Width="44" Height="44" Margin="0,0,10,0" />
                     <StackPanel VerticalAlignment="Center">
                         <TextBlock Text="KobraCache" FontSize="28" FontWeight="SemiBold" Foreground="#0F172A" />
-                        <TextBlock x:Name="VersionText" Text="v0.7.0" Foreground="#0F766E" FontWeight="SemiBold" />
+                        <TextBlock x:Name="VersionText" Text="v0.8.0" Foreground="#0F766E" FontWeight="SemiBold" />
                     </StackPanel>
                 </StackPanel>
                 <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
@@ -211,7 +211,6 @@
                         <DataGrid.Columns>
                             <DataGridTextColumn Header="Name" Binding="{Binding Name}" Width="*" />
                             <DataGridTextColumn Header="IP" Binding="{Binding IpAddress}" Width="112" />
-                            <DataGridTextColumn Header="Mode" Binding="{Binding CapabilityText}" Width="118" />
                             <DataGridTextColumn Header="Status" Binding="{Binding StatusText}" Width="98" />
                         </DataGrid.Columns>
                     </DataGrid>
@@ -247,20 +246,22 @@
                         </StackPanel>
 
                         <Button x:Name="SelectAllButton" Grid.Column="2" Content="Select All" Style="{StaticResource BlueButton}" Click="SelectAllFiles_Click" />
-                        <Button Grid.Column="4" Style="{StaticResource ViewFilesButton}" Click="Preview_Click">
-                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                <Border Style="{StaticResource StepBadge}" Background="#0F766E">
-                                    <TextBlock Text="3" Foreground="#FFFFFF" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center" />
-                                </Border>
-                                <Viewbox Style="{StaticResource ButtonIcon}">
-                                    <Canvas Width="24" Height="24">
-                                        <Path Stroke="#0F766E" StrokeThickness="1.8" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"
-                                              Data="M6,4 L14,4 L19,9 L19,20 L6,20 Z M14,4 L14,9 L19,9 M10,14 C10,12.4 11.4,11 13,11 C14.6,11 16,12.4 16,14 C16,15.6 14.6,17 13,17 C11.4,17 10,15.6 10,14 M15.2,16.2 L17.5,18.5" />
-                                    </Canvas>
-                                </Viewbox>
-                                <TextBlock Text="View Files" VerticalAlignment="Center" />
-                            </StackPanel>
-                        </Button>
+                        <StackPanel Grid.Column="4" Orientation="Horizontal" VerticalAlignment="Center">
+                            <Border Style="{StaticResource StepBadge}" Background="#F97316">
+                                <TextBlock Text="3" Foreground="#FFFFFF" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            </Border>
+                            <Button Style="{StaticResource ViewFilesButton}" Click="Preview_Click">
+                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                    <Viewbox Style="{StaticResource ButtonIcon}">
+                                        <Canvas Width="24" Height="24">
+                                            <Path Stroke="#0F766E" StrokeThickness="1.8" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"
+                                                  Data="M6,4 L14,4 L19,9 L19,20 L6,20 Z M14,4 L14,9 L19,9 M10,14 C10,12.4 11.4,11 13,11 C14.6,11 16,12.4 16,14 C16,15.6 14.6,17 13,17 C11.4,17 10,15.6 10,14 M15.2,16.2 L17.5,18.5" />
+                                        </Canvas>
+                                    </Viewbox>
+                                    <TextBlock Text="View Files" VerticalAlignment="Center" />
+                                </StackPanel>
+                            </Button>
+                        </StackPanel>
                     </Grid>
 
                     <DataGrid x:Name="FilesGrid" Grid.Row="1" ItemsSource="{Binding FilePreviewRows}">

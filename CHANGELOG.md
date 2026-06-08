@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.8.0 - 2026-06-08
+
+- Moved the step 3 marker beside the `View Files` button and changed it to orange.
+- Removed the `Mode` column from the printer list.
+
 ## 0.7.0 - 2026-06-08
 
 - Removed the separate cloud-token import checkbox; clicking `Import Cloud Printers` now performs the Slicer cloud import directly.
