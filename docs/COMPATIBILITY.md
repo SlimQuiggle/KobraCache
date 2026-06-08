@@ -40,7 +40,7 @@ A printer must meet these requirements for full cleanup support:
 - The printer responds to Anycubic file-manager commands for `listLocal`, `listUdisk`, `deleteLocal`, and `deleteUdisk`.
 - KobraCache can confirm the printer is idle before deletion.
 
-Manual IP entry alone is not enough to list or delete files. Manual IP rows need matching Slicer LAN credentials or matching Slicer Cloud metadata.
+IP addresses alone are not enough to list or delete files. KobraCache no longer supports adding IP-only printer rows; import printers from Slicer LAN or Slicer Cloud so the app has the credentials and printer metadata needed for file commands.
 
 ## Reference Basis
 

@@ -4,7 +4,6 @@ KobraCache is a Windows desktop utility that gives Anycubic Kobra owners an easi
 
 ## Current Scope
 
-- Manual printer IP entry.
 - Anycubic Slicer Next LAN import from `%APPDATA%\AnycubicSlicerNext\AnycubicSlicerNext.conf`.
 - Anycubic Slicer Next cloud import after explicit opt-in.
 - Separate cleanup targets for local printer cache, USB storage, and cloud files.
@@ -27,13 +26,13 @@ See [Printer Compatibility](docs/COMPATIBILITY.md) for the current compatibility
 
 ## Important Limits
 
-Manual IP entry does not provide delete credentials by itself. A manually entered printer stays in probe-only mode until matching LAN or cloud credentials are imported from Slicer.
+Printers must be imported from Anycubic Slicer Next. IP-only printer entry is not supported because an IP address does not provide the LAN MQTT or cloud command credentials needed to list and delete files.
 
 KobraCache does not persist Anycubic cloud tokens. Cloud tokens are read from Slicer only during the explicit import action and kept in memory for the current app session.
 
 Cloud REST and MQTT paths are implemented from public behavior references and should be validated against a live logged-in Slicer account before using deletion broadly.
 
-Printer IPs are identifiers, not credentials. If a printer is only added by IP, KobraCache cannot list or delete files from it. Import Slicer Cloud or Slicer LAN credentials, then use the imported or matched printer row and click `View Files`.
+Printer IPs are identifiers, not credentials. Use `Import Slicer LAN` or `Import Cloud Printers`, then select the imported printer row and click `View Files`.
 
 Cloud-mode printer-local cache and USB listing use Anycubic cloud MQTT after a Slicer Cloud import. KobraCache lists cloud account files through the REST API, and it lists/deletes printer-local cache or USB files through LAN MQTT when LAN credentials are available or through cloud MQTT when cloud printer command metadata is available.
 

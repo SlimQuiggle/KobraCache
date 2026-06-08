@@ -8,7 +8,6 @@ using Forms = System.Windows.Forms;
 using MessageBox = System.Windows.MessageBox;
 using KobraCache.Core.Cloud;
 using KobraCache.Core.Models;
-using KobraCache.Core.Services;
 using KobraCache.Core.Slicer;
 using KobraCache.Core.Transports;
 
@@ -19,7 +18,6 @@ public partial class MainWindow : Window
     private readonly ObservableCollection<PrinterRow> _printers = [];
     private readonly ObservableCollection<FilePreviewRow> _filePreviewRows = [];
     private readonly AppSettingsService _settingsService = new();
-    private readonly ManualPrinterService _manualPrinterService = new();
     private readonly SlicerConfigImporter _slicerImporter = new();
     private readonly AppUpdateService _updateService = new();
     private readonly AnycubicCloudClient _cloudClient = new();
@@ -63,18 +61,6 @@ public partial class MainWindow : Window
         await SaveSettingsAsync();
         _trayIcon?.Dispose();
         _trayIcon = null;
-    }
-
-    private async void AddManualIp_Click(object sender, RoutedEventArgs e)
-    {
-        await RunUiTaskAsync(async () =>
-        {
-            var printer = _manualPrinterService.AddManualIp(ManualIpTextBox.Text);
-            UpsertPrinter(printer);
-            ManualIpTextBox.Clear();
-            await SaveSettingsAsync();
-            SetStatus($"Added {printer.IpAddress}.");
-        });
     }
 
     private async void ImportSlicerLan_Click(object sender, RoutedEventArgs e)
@@ -237,34 +223,13 @@ public partial class MainWindow : Window
         UsbTargetCheckBox.IsChecked = !useNewStorageDefaults && _settings.IncludeUsb;
         CloudTargetCheckBox.IsChecked = !useNewStorageDefaults && _settings.IncludeCloud;
 
-        foreach (var ipAddress in _settings.ManualIpAddresses.Distinct(StringComparer.OrdinalIgnoreCase))
-        {
-            try
-            {
-                UpsertPrinter(_manualPrinterService.AddManualIp(ipAddress));
-            }
-            catch (ArgumentException)
-            {
-                // Ignore stale settings entries that no longer parse as IP addresses.
-            }
-        }
-
-        SetStatus(_printers.Count == 0 ? "Ready." : $"Loaded {_printers.Count} saved printer(s).");
+        SetStatus("Ready. Import printers from Slicer LAN or Slicer Cloud.");
     }
 
     private async Task SaveSettingsAsync()
     {
-        var manualIps = _printers
-            .Select(row => row.Printer.IpAddress)
-            .Where(ip => !string.IsNullOrWhiteSpace(ip))
-            .Cast<string>()
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .OrderBy(ip => ip, StringComparer.OrdinalIgnoreCase)
-            .ToList();
-
         _settings = new AppSettings
         {
-            ManualIpAddresses = manualIps,
             StorageTargetDefaultsVersion = 1,
             IncludeLocalCache = LocalTargetCheckBox.IsChecked == true,
             IncludeUsb = UsbTargetCheckBox.IsChecked == true,
@@ -438,9 +403,7 @@ public partial class MainWindow : Window
         if (skippedTargets.Count > 0)
         {
             var skipped = string.Join(", ", skippedTargets);
-            var message = printer.Source == PrinterSource.ManualIp && !printer.HasLanCredentials && !HasCloudCapability(printer)
-                ? $"Manual IPs cannot list files by themselves. Import Slicer Cloud or Slicer LAN credentials, then select the imported/matched printer. Skipped {skipped}."
-                : $"Skipped {skipped}; no credentials are available for those selected target(s).";
+            var message = $"Skipped {skipped}; import Slicer Cloud or Slicer LAN credentials for those selected target(s).";
             messages.Add(message);
             AppLogger.Warn(message);
         }

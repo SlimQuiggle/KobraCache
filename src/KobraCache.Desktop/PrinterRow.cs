@@ -33,7 +33,6 @@ public sealed class PrinterRow : INotifyPropertyChanged
 
             return _printer.Source switch
             {
-                PrinterSource.ManualIp => "Manual IP",
                 PrinterSource.SlicerLan => "Slicer LAN",
                 PrinterSource.SlicerCloud => "Slicer Cloud",
                 _ => _printer.Source.ToString()
@@ -127,7 +126,6 @@ public sealed class PrinterRow : INotifyPropertyChanged
 
     private static PrinterIdentity MergePrinters(PrinterIdentity existing, PrinterIdentity incoming)
     {
-        var hasIncomingDeleteCapability = incoming.HasLanCredentials || HasCloudCapability(incoming);
         var connectionMode = HasCloudCapability(incoming) || HasCloudCapability(existing)
             ? PrinterConnectionMode.Cloud
             : incoming.HasLanCredentials || existing.HasLanCredentials
@@ -140,7 +138,7 @@ public sealed class PrinterRow : INotifyPropertyChanged
             DisplayName = FirstNonBlank(incoming.DisplayName, existing.DisplayName),
             ModelName = FirstNonBlank(incoming.ModelName, existing.ModelName),
             IpAddress = FirstNonBlank(incoming.IpAddress, existing.IpAddress),
-            Source = existing.Source == PrinterSource.ManualIp && hasIncomingDeleteCapability ? incoming.Source : existing.Source,
+            Source = HasDeleteCapability(incoming) && !HasDeleteCapability(existing) ? incoming.Source : existing.Source,
             ConnectionMode = connectionMode,
             ModeId = FirstNonBlank(incoming.ModeId, existing.ModeId),
             DeviceId = FirstNonBlank(incoming.DeviceId, existing.DeviceId),
@@ -156,12 +154,12 @@ public sealed class PrinterRow : INotifyPropertyChanged
 
     private static string SelectKey(PrinterIdentity existing, PrinterIdentity incoming)
     {
-        if (existing.Source == PrinterSource.ManualIp && incoming.Source != PrinterSource.ManualIp)
-        {
-            return existing.Key;
-        }
-
         return FirstNonBlank(existing.Key, incoming.Key) ?? existing.Key;
+    }
+
+    private static bool HasDeleteCapability(PrinterIdentity printer)
+    {
+        return printer.HasLanCredentials || HasCloudCapability(printer);
     }
 
     private static bool HasCloudCapability(PrinterIdentity printer)

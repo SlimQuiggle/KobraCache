@@ -78,18 +78,6 @@ public sealed class CoreBehaviorTests
     }
 
     [Fact]
-    public void ManualPrinterService_accepts_valid_ip_and_rejects_invalid_ip()
-    {
-        var service = new ManualPrinterService();
-
-        var printer = service.AddManualIp(" 192.168.9.170 ");
-
-        Assert.Equal("192.168.9.170", printer.IpAddress);
-        Assert.Equal(PrinterConnectionMode.ProbeOnly, printer.ConnectionMode);
-        Assert.Throws<ArgumentException>(() => service.AddManualIp("not-an-ip"));
-    }
-
-    [Fact]
     public void RetentionFilter_requires_idle_status_and_excludes_current_new_and_undated_files()
     {
         var printer = TestPrinter();
@@ -330,8 +318,8 @@ public sealed class CoreBehaviorTests
         {
             Key = "test-printer",
             DisplayName = "Test Printer",
-            Source = PrinterSource.ManualIp,
-            ConnectionMode = PrinterConnectionMode.ProbeOnly
+            Source = PrinterSource.SlicerLan,
+            ConnectionMode = PrinterConnectionMode.LanMqtt
         };
     }
 

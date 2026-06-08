@@ -88,7 +88,7 @@
                     <Image Source="Assets/KobraCacheLogo.png" Width="44" Height="44" Margin="0,0,10,0" />
                     <StackPanel VerticalAlignment="Center">
                         <TextBlock Text="KobraCache" FontSize="28" FontWeight="SemiBold" Foreground="#0F172A" />
-                        <TextBlock x:Name="VersionText" Text="v0.5.0" Foreground="#0F766E" FontWeight="SemiBold" />
+                        <TextBlock x:Name="VersionText" Text="v0.6.0" Foreground="#0F766E" FontWeight="SemiBold" />
                     </StackPanel>
                 </StackPanel>
                 <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
@@ -104,20 +104,15 @@
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto" />
-                    <ColumnDefinition Width="220" />
-                    <ColumnDefinition Width="Auto" />
-                    <ColumnDefinition Width="18" />
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="*" />
                 </Grid.ColumnDefinitions>
 
-                <TextBlock Grid.Column="0" Text="Printer IP" VerticalAlignment="Center" Margin="0,0,8,0" />
-                <TextBox x:Name="ManualIpTextBox" Grid.Column="1" VerticalAlignment="Center" />
-                <Button Grid.Column="2" Content="Add IP" Style="{StaticResource BlueButton}" Click="AddManualIp_Click" />
-
-                <Button Grid.Column="4" Content="Import Slicer LAN" Style="{StaticResource WarmButton}" Click="ImportSlicerLan_Click" />
-                <StackPanel Grid.Column="5" Orientation="Horizontal" VerticalAlignment="Center" Margin="8,0,0,0">
+                <TextBlock Grid.Column="0" Text="Import printers from Anycubic Slicer Next" VerticalAlignment="Center"
+                           FontWeight="SemiBold" Foreground="#0F172A" Margin="0,0,12,0" />
+                <Button Grid.Column="1" Content="Import Slicer LAN" Style="{StaticResource WarmButton}" Click="ImportSlicerLan_Click" />
+                <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" Margin="8,0,0,0">
                     <CheckBox x:Name="CloudOptInCheckBox" Content="Allow Slicer cloud token import"
                               VerticalAlignment="Center" Margin="0,0,8,0" />
                     <Button Content="Import Cloud Printers" Style="{StaticResource WarmButton}" Click="ImportSlicerCloud_Click" />
