@@ -1,6 +1,6 @@
 # KobraCache
 
-KobraCache is a Windows desktop utility for clearing old Anycubic Kobra S1 and compatible Anycubic Kobra printer files without subnet scanning.
+KobraCache is a Windows desktop utility that gives Anycubic Kobra owners an easier way to clear old G-code files from printer local storage, USB storage, and cloud files instead of deleting each file from the printer screen or resorting to a device reset.
 
 ## Current Scope
 

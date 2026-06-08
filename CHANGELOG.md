@@ -3,6 +3,7 @@
 ## Unreleased
 
 - Added printer compatibility documentation for confirmed, likely, and unknown Anycubic model families.
+- Refined the project description to focus on clearing old G-code files from printer storage.
 
 ## 0.5.0 - 2026-06-07
 
