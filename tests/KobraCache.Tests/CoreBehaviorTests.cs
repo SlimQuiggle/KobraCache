@@ -148,6 +148,47 @@ public sealed class CoreBehaviorTests
     }
 
     [Fact]
+    public void LanMqttPrinterClient_parses_lan_file_list_variants()
+    {
+        using var document = JsonDocument.Parse("""
+        {
+          "type": "file",
+          "action": "listLocal",
+          "state": "done",
+          "data": {
+            "fileList": [
+              {"fileName":"camel.gcode","filePath":"/local","filesize":1234,"timestamp":1700000000},
+              {"name":"folder","is_dir":true},
+              "string-file.gcode"
+            ]
+          }
+        }
+        """);
+        var parseFiles = typeof(LanMqttPrinterClient).GetMethod("ParseFiles", BindingFlags.NonPublic | BindingFlags.Static);
+
+        var files = (IReadOnlyList<PrinterCacheFile>)parseFiles!.Invoke(null, ["printer-1", StorageTarget.LocalCache, document.RootElement])!;
+
+        Assert.Equal(["camel.gcode", "string-file.gcode"], files.Select(file => file.FileName).ToArray());
+        Assert.Equal(1234, files.First().SizeBytes);
+        Assert.Equal("/local", files.First().Path);
+    }
+
+    [Fact]
+    public void LanMqttPrinterClient_uses_file_topic_for_lan_file_commands()
+    {
+        var gatewayType = typeof(LanMqttPrinterClient).GetNestedType("MqttNetLanGateway", BindingFlags.NonPublic);
+        var buildCommandTopics = gatewayType!.GetMethod("BuildCommandTopics", BindingFlags.NonPublic | BindingFlags.Static);
+
+        var topics = (IReadOnlyList<string>)buildCommandTopics!.Invoke(null, [TestLanPrinter(), "file", true])!;
+        var legacyTopics = (IReadOnlyList<string>)buildCommandTopics.Invoke(null, [TestLanPrinter() with { ModeId = "20021" }, "file", true])!;
+
+        Assert.Equal("anycubic/anycubicCloud/v1/slicer/printer/mode-1/device-1/file", topics[0]);
+        Assert.Equal("anycubic/anycubicCloud/v1/server/printer/mode-1/device-1/file", topics[1]);
+        Assert.Equal("anycubic/anycubicCloud/v1/server/printer/20021/device-1/file", legacyTopics[0]);
+        Assert.DoesNotContain(topics, topic => topic.EndsWith("/listLocal", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
     public async Task AnycubicCloudClient_imports_status_lists_and_deletes_with_token_header()
     {
         var handler = new StubHttpHandler(request =>

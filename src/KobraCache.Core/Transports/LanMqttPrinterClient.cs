@@ -115,7 +115,14 @@ public sealed class LanMqttPrinterClient : IPrinterTransport
         return document.RootElement.TryGetProperty("msgid", out var value) ? value.GetString() : null;
     }
 
-    private static bool IsExpectedResponse(string text, string? msgId, string action)
+    private static string? GetPayloadType(object payload)
+    {
+        var json = JsonSerializer.Serialize(payload);
+        using var document = JsonDocument.Parse(json);
+        return document.RootElement.TryGetProperty("type", out var value) ? value.GetString() : null;
+    }
+
+    private static bool IsExpectedResponse(string text, string? msgId, string action, string topic)
     {
         try
         {
@@ -123,8 +130,11 @@ public sealed class LanMqttPrinterClient : IPrinterTransport
             var root = document.RootElement;
             var responseMsgId = GetString(root, "msgid");
             var responseAction = GetString(root, "action") ?? GetString(root, "type");
+            var isFileList = IsListAction(action) && ContainsFileListPayload(root);
             return (!string.IsNullOrWhiteSpace(msgId) && responseMsgId == msgId) ||
-                   string.Equals(responseAction, action, StringComparison.OrdinalIgnoreCase);
+                   string.Equals(responseAction, action, StringComparison.OrdinalIgnoreCase) ||
+                   isFileList ||
+                   topic.EndsWith($"/{action}/report", StringComparison.OrdinalIgnoreCase);
         }
         catch (JsonException)
         {
@@ -178,7 +188,7 @@ public sealed class LanMqttPrinterClient : IPrinterTransport
 
     private static IReadOnlyList<PrinterCacheFile> ParseFiles(string printerKey, StorageTarget target, JsonElement root)
     {
-        return EnumerateObjects(root)
+        return EnumerateFileItems(root)
             .Select(item => ToFile(printerKey, target, item))
             .Where(file => file is not null)
             .Cast<PrinterCacheFile>()
@@ -187,8 +197,20 @@ public sealed class LanMqttPrinterClient : IPrinterTransport
 
     private static PrinterCacheFile? ToFile(string printerKey, StorageTarget target, JsonElement item)
     {
-        var name = GetString(item, "filename") ?? GetString(item, "name") ?? GetString(item, "file_name");
+        var name = item.ValueKind == JsonValueKind.String
+            ? item.GetString()
+            : GetString(item, "filename")
+              ?? GetString(item, "fileName")
+              ?? GetString(item, "old_filename")
+              ?? GetString(item, "file_name")
+              ?? GetString(item, "gcode_name")
+              ?? GetString(item, "name");
         if (string.IsNullOrWhiteSpace(name))
+        {
+            return null;
+        }
+
+        if (item.ValueKind == JsonValueKind.Object && IsDirectoryRecord(item))
         {
             return null;
         }
@@ -197,46 +219,185 @@ public sealed class LanMqttPrinterClient : IPrinterTransport
         {
             PrinterKey = printerKey,
             StorageTarget = target,
-            Path = GetString(item, "path") ?? GetString(item, "filepath") ?? "/",
+            Path = item.ValueKind == JsonValueKind.Object
+                ? GetString(item, "path") ?? GetString(item, "filepath") ?? GetString(item, "filePath") ?? "/"
+                : "/",
             FileName = name,
-            RemoteId = GetString(item, "taskid") ?? GetString(item, "file_id") ?? GetString(item, "id"),
-            SizeBytes = GetLong(item, "filesize") ?? GetLong(item, "file_size") ?? GetLong(item, "size"),
-            CreatedAt = GetDate(item, "create_time") ?? GetDate(item, "created_at"),
-            ModifiedAt = GetDate(item, "update_time") ?? GetDate(item, "modified_at") ?? GetDate(item, "mtime"),
-            IsCurrentJob = GetBool(item, "is_current") ?? GetBool(item, "printing") ?? false
+            RemoteId = item.ValueKind == JsonValueKind.Object
+                ? GetString(item, "taskid") ?? GetString(item, "file_id") ?? GetString(item, "fileID") ?? GetString(item, "id")
+                : null,
+            SizeBytes = item.ValueKind == JsonValueKind.Object
+                ? GetLong(item, "filesize") ?? GetLong(item, "file_size") ?? GetLong(item, "size")
+                : null,
+            CreatedAt = item.ValueKind == JsonValueKind.Object
+                ? GetDate(item, "time") ?? GetDate(item, "create_time") ?? GetDate(item, "created_at")
+                : null,
+            ModifiedAt = item.ValueKind == JsonValueKind.Object
+                ? GetDate(item, "timestamp") ?? GetDate(item, "update_time") ?? GetDate(item, "updated_at") ?? GetDate(item, "modified_at") ?? GetDate(item, "mtime")
+                : null,
+            IsCurrentJob = item.ValueKind == JsonValueKind.Object && (GetBool(item, "is_current") ?? GetBool(item, "is_printing") ?? GetBool(item, "printing") ?? false)
         };
     }
 
-    private static IEnumerable<JsonElement> EnumerateObjects(JsonElement root)
+    private static IEnumerable<JsonElement> EnumerateFileItems(JsonElement root)
     {
         if (root.ValueKind == JsonValueKind.Array)
         {
             foreach (var item in root.EnumerateArray())
             {
-                foreach (var nested in EnumerateObjects(item))
+                foreach (var nested in EnumerateFileItems(item))
                 {
                     yield return nested;
                 }
             }
         }
+        else if (root.ValueKind == JsonValueKind.String && LooksLikeFileName(root.GetString()))
+        {
+            yield return root;
+        }
         else if (root.ValueKind == JsonValueKind.Object)
         {
-            foreach (var name in new[] { "data", "files", "list", "file_info", "records" })
+            if (LooksLikeFileRecord(root))
             {
-                if (root.TryGetProperty(name, out var child))
+                yield return root;
+            }
+
+            foreach (var property in root.EnumerateObject())
+            {
+                if (property.Value.ValueKind is JsonValueKind.Object or JsonValueKind.Array)
                 {
-                    foreach (var nested in EnumerateObjects(child))
+                    foreach (var nested in EnumerateFileItems(property.Value))
                     {
                         yield return nested;
                     }
                 }
             }
+        }
+    }
 
-            if (GetString(root, "filename") is not null || GetString(root, "name") is not null)
+    private static bool LooksLikeFileRecord(JsonElement item)
+    {
+        if (GetString(item, "filename") is not null ||
+            GetString(item, "fileName") is not null ||
+            GetString(item, "old_filename") is not null ||
+            GetString(item, "file_name") is not null ||
+            GetString(item, "gcode_name") is not null)
+        {
+            return true;
+        }
+
+        return GetString(item, "name") is not null &&
+               (HasProperty(item, "size") ||
+                HasProperty(item, "filesize") ||
+                HasProperty(item, "file_size") ||
+                HasProperty(item, "path") ||
+                HasProperty(item, "filepath") ||
+                HasProperty(item, "filePath") ||
+                HasProperty(item, "is_dir") ||
+                HasProperty(item, "isDir") ||
+                HasProperty(item, "update_time") ||
+                HasProperty(item, "timestamp"));
+    }
+
+    private static bool IsDirectoryRecord(JsonElement item)
+    {
+        var type = GetString(item, "type") ?? GetString(item, "filetype") ?? GetString(item, "file_type");
+        return GetBool(item, "is_dir") == true ||
+               GetBool(item, "isDir") == true ||
+               string.Equals(type, "dir", StringComparison.OrdinalIgnoreCase) ||
+               string.Equals(type, "folder", StringComparison.OrdinalIgnoreCase) ||
+               string.Equals(type, "directory", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool ContainsFileListPayload(JsonElement root)
+    {
+        if (root.ValueKind == JsonValueKind.Array)
+        {
+            return true;
+        }
+
+        if (root.ValueKind != JsonValueKind.Object)
+        {
+            return false;
+        }
+
+        foreach (var property in root.EnumerateObject())
+        {
+            if (property.Name.Equals("data", StringComparison.OrdinalIgnoreCase))
             {
-                yield return root;
+                if (property.Value.ValueKind == JsonValueKind.Array)
+                {
+                    return true;
+                }
+
+                if (ContainsFileListPayload(property.Value))
+                {
+                    return true;
+                }
+
+                continue;
+            }
+
+            if (IsFileListContainerName(property.Name) && property.Value.ValueKind is JsonValueKind.Array or JsonValueKind.Object)
+            {
+                return true;
+            }
+
+            if (ContainsFileListPayload(property.Value))
+            {
+                return true;
             }
         }
+
+        return LooksLikeFileRecord(root);
+    }
+
+    private static bool ContainsFileListPayload(string text)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(text);
+            return ContainsFileListPayload(document.RootElement);
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
+    }
+
+    private static bool IsFileListContainerName(string name)
+    {
+        return name.Equals("data", StringComparison.OrdinalIgnoreCase) ||
+               name.Equals("files", StringComparison.OrdinalIgnoreCase) ||
+               name.Equals("list", StringComparison.OrdinalIgnoreCase) ||
+               name.Equals("records", StringComparison.OrdinalIgnoreCase) ||
+               name.Equals("rows", StringComparison.OrdinalIgnoreCase) ||
+               name.Equals("file_info", StringComparison.OrdinalIgnoreCase) ||
+               name.Equals("fileList", StringComparison.OrdinalIgnoreCase) ||
+               name.Equals("file_list", StringComparison.OrdinalIgnoreCase) ||
+               name.Equals("items", StringComparison.OrdinalIgnoreCase) ||
+               name.Equals("children", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsListAction(string action)
+    {
+        return action.Equals("listLocal", StringComparison.OrdinalIgnoreCase) ||
+               action.Equals("listUdisk", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool LooksLikeFileName(string? value)
+    {
+        return !string.IsNullOrWhiteSpace(value) &&
+               !value.EndsWith("/", StringComparison.Ordinal) &&
+               (value.EndsWith(".gcode", StringComparison.OrdinalIgnoreCase) ||
+                value.EndsWith(".gco", StringComparison.OrdinalIgnoreCase) ||
+                value.EndsWith(".gc", StringComparison.OrdinalIgnoreCase) ||
+                value.EndsWith(".3mf", StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static bool HasProperty(JsonElement item, string name)
+    {
+        return item.ValueKind == JsonValueKind.Object && item.TryGetProperty(name, out _);
     }
 
     private static JsonElement? GetProperty(JsonElement item, string name)
@@ -272,6 +433,16 @@ public sealed class LanMqttPrinterClient : IPrinterTransport
     private static bool? GetBool(JsonElement item, string name)
     {
         var text = GetString(item, name);
+        if (text == "1")
+        {
+            return true;
+        }
+
+        if (text == "0")
+        {
+            return false;
+        }
+
         return bool.TryParse(text, out var value) ? value : null;
     }
 
@@ -321,8 +492,9 @@ public sealed class LanMqttPrinterClient : IPrinterTransport
             CancellationToken cancellationToken = default)
         {
             var msgId = GetPayloadMsgId(payload);
-            var responseTopic = $"anycubic/anycubicCloud/v1/printer/public/{printer.ModeId}/{printer.DeviceId}/#";
-            var commandTopic = $"anycubic/anycubicCloud/v1/slicer/printer/{printer.ModeId}/{printer.DeviceId}/{action}";
+            var commandType = GetPayloadType(payload) ?? action;
+            var responseTopic = "anycubic/anycubicCloud/v1/printer/public/#";
+            var commandTopics = BuildCommandTopics(printer, commandType, IsReadOnlyAction(action));
             var completion = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
 
             var factory = new MqttFactory();
@@ -332,7 +504,12 @@ public sealed class LanMqttPrinterClient : IPrinterTransport
             client.ApplicationMessageReceivedAsync += args =>
             {
                 var text = Encoding.UTF8.GetString(args.ApplicationMessage.PayloadSegment);
-                if (IsExpectedResponse(text, msgId, action))
+                if (!IsExpectedResponse(text, msgId, action, args.ApplicationMessage.Topic))
+                {
+                    return Task.CompletedTask;
+                }
+
+                if (!IsListAction(action) || ContainsFileListPayload(text))
                 {
                     completion.TrySetResult(text);
                 }
@@ -345,16 +522,55 @@ public sealed class LanMqttPrinterClient : IPrinterTransport
             await client.SubscribeAsync(responseTopic, MqttQualityOfServiceLevel.AtLeastOnce, cancellationToken).ConfigureAwait(false);
 
             var json = JsonSerializer.Serialize(payload);
-            var message = new MqttApplicationMessageBuilder()
-                .WithTopic(commandTopic)
-                .WithPayload(json)
-                .WithQualityOfServiceLevel(MqttQualityOfServiceLevel.AtLeastOnce)
-                .Build();
+            foreach (var commandTopic in commandTopics)
+            {
+                var message = new MqttApplicationMessageBuilder()
+                    .WithTopic(commandTopic)
+                    .WithPayload(json)
+                    .WithQualityOfServiceLevel(MqttQualityOfServiceLevel.AtLeastOnce)
+                    .Build();
 
-            await client.PublishAsync(message, cancellationToken).ConfigureAwait(false);
+                await client.PublishAsync(message, cancellationToken).ConfigureAwait(false);
+            }
+
             var responseText = await completion.Task.WaitAsync(timeout, cancellationToken).ConfigureAwait(false);
             await client.DisconnectAsync(cancellationToken: CancellationToken.None).ConfigureAwait(false);
             return responseText;
+        }
+
+        private static IReadOnlyList<string> BuildCommandTopics(
+            PrinterIdentity printer,
+            string commandType,
+            bool includeFallbacks)
+        {
+            var primarySender = IsLegacyServerTopicModel(printer.ModeId) ? "server" : "slicer";
+            var fallbackSender = primarySender == "slicer" ? "server" : "slicer";
+            var primary = BuildCommandTopic(primarySender, printer, commandType);
+            if (!includeFallbacks)
+            {
+                return [primary];
+            }
+
+            var fallback = BuildCommandTopic(fallbackSender, printer, commandType);
+            return primary.Equals(fallback, StringComparison.OrdinalIgnoreCase)
+                ? [primary]
+                : [primary, fallback];
+        }
+
+        private static string BuildCommandTopic(string sender, PrinterIdentity printer, string commandType)
+        {
+            return $"anycubic/anycubicCloud/v1/{sender}/printer/{printer.ModeId}/{printer.DeviceId}/{commandType}";
+        }
+
+        private static bool IsLegacyServerTopicModel(string? modeId)
+        {
+            return modeId is "20021" or "20022" or "20023";
+        }
+
+        private static bool IsReadOnlyAction(string action)
+        {
+            return action.Equals("info", StringComparison.OrdinalIgnoreCase) ||
+                   IsListAction(action);
         }
 
         private static MqttClientOptions BuildOptions(PrinterIdentity printer)

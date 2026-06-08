@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.10.0 - 2026-06-08
+
+- Fixed LAN file listing publishing to the wrong MQTT command topic segment.
+- LAN file-list requests now publish to `/file` with `listLocal` / `listUdisk` in the payload.
+- Added read-only fallback command topics for firmware families that use `server/printer` instead of `slicer/printer`.
+- Expanded LAN file-list parsing for additional Anycubic response shapes.
+
 ## 0.9.0 - 2026-06-08
 
 - Fixed LAN MQTT connections rejecting local printer TLS certificates during file listing.
