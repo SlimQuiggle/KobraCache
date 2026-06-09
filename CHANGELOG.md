@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.11.0 - 2026-06-09
+
+- Fixed LAN status queries accepting ack-only MQTT packets as `Unknown`.
+- LAN deletion can now unblock when the printer reports idle via `info/report` payloads such as `state: free` or numeric `status: 1`.
+- Added tests for LAN status report parsing and ack-only packet filtering.
+
 ## 0.10.0 - 2026-06-08
 
 - Fixed LAN file listing publishing to the wrong MQTT command topic segment.

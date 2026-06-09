@@ -189,6 +189,42 @@ public sealed class CoreBehaviorTests
     }
 
     [Fact]
+    public void LanMqttPrinterClient_parses_lan_status_reports_and_ignores_ack_only_packets()
+    {
+        using var ackDocument = JsonDocument.Parse("""{"type":"info","action":"query","state":"done","code":200,"msg":"done"}""");
+        using var freeDocument = JsonDocument.Parse("""
+        {
+          "type": "info",
+          "action": "report",
+          "state": "done",
+          "code": 200,
+          "data": {
+            "printerName": "Anycubic Kobra S1",
+            "state": "free",
+            "status": 1
+          }
+        }
+        """);
+        using var numericDocument = JsonDocument.Parse("""{"type":"info","action":"report","data":{"status":1}}""");
+        using var booleanDocument = JsonDocument.Parse("""{"type":"info","action":"report","data":{"isPrinting":false}}""");
+        using var busyDocument = JsonDocument.Parse("""{"type":"info","action":"report","state":"done","data":{"status":2}}""");
+        var parseStatus = typeof(LanMqttPrinterClient).GetMethod("ParseStatus", BindingFlags.NonPublic | BindingFlags.Static);
+        var containsStatusPayload = typeof(LanMqttPrinterClient)
+            .GetMethods(BindingFlags.NonPublic | BindingFlags.Static)
+            .Single(method => method.Name == "ContainsStatusPayload" &&
+                              method.GetParameters().Length == 1 &&
+                              method.GetParameters()[0].ParameterType == typeof(JsonElement));
+
+        Assert.False((bool)containsStatusPayload!.Invoke(null, [ackDocument.RootElement])!);
+        Assert.Equal(PrinterRuntimeStatus.Unknown, (PrinterRuntimeStatus)parseStatus!.Invoke(null, [ackDocument.RootElement])!);
+        Assert.True((bool)containsStatusPayload.Invoke(null, [freeDocument.RootElement])!);
+        Assert.Equal(PrinterRuntimeStatus.Idle, (PrinterRuntimeStatus)parseStatus.Invoke(null, [freeDocument.RootElement])!);
+        Assert.Equal(PrinterRuntimeStatus.Idle, (PrinterRuntimeStatus)parseStatus.Invoke(null, [numericDocument.RootElement])!);
+        Assert.Equal(PrinterRuntimeStatus.Idle, (PrinterRuntimeStatus)parseStatus.Invoke(null, [booleanDocument.RootElement])!);
+        Assert.Equal(PrinterRuntimeStatus.Busy, (PrinterRuntimeStatus)parseStatus.Invoke(null, [busyDocument.RootElement])!);
+    }
+
+    [Fact]
     public async Task AnycubicCloudClient_imports_status_lists_and_deletes_with_token_header()
     {
         var handler = new StubHttpHandler(request =>

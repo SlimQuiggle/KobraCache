@@ -160,11 +160,36 @@ public sealed class LanMqttPrinterClient : IPrinterTransport
 
     private static PrinterRuntimeStatus ParseStatus(JsonElement root)
     {
-        var data = GetProperty(root, "data") ?? root;
-        var state = FirstNonBlank(GetString(data, "state"), GetString(root, "state"), GetString(data, "status"));
+        var statusItems = EnumerateStatusItems(root).ToArray();
+        foreach (var item in statusItems)
+        {
+            var parsed = ParseStatusItem(item);
+            if (parsed != PrinterRuntimeStatus.Unknown)
+            {
+                return parsed;
+            }
+        }
+
+        return PrinterRuntimeStatus.Unknown;
+    }
+
+    private static PrinterRuntimeStatus ParseStatusItem(JsonElement item)
+    {
+        var state = FirstNonBlank(
+            GetString(item, "state"),
+            GetString(item, "printer_state"),
+            GetString(item, "work_state"),
+            GetString(item, "print_state"),
+            GetString(item, "print_status"),
+            GetString(item, "status"),
+            GetString(item, "ready_status"),
+            GetString(item, "reason"),
+            GetString(item, "msg"));
 
         if (state.Contains("free", StringComparison.OrdinalIgnoreCase) ||
             state.Contains("idle", StringComparison.OrdinalIgnoreCase) ||
+            state.Contains("standby", StringComparison.OrdinalIgnoreCase) ||
+            state.Contains("ready", StringComparison.OrdinalIgnoreCase) ||
             state.Equals("done", StringComparison.OrdinalIgnoreCase))
         {
             return PrinterRuntimeStatus.Idle;
@@ -172,13 +197,52 @@ public sealed class LanMqttPrinterClient : IPrinterTransport
 
         if (state.Contains("busy", StringComparison.OrdinalIgnoreCase) ||
             state.Contains("print", StringComparison.OrdinalIgnoreCase) ||
+            state.Contains("work", StringComparison.OrdinalIgnoreCase) ||
+            state.Contains("run", StringComparison.OrdinalIgnoreCase) ||
             state.Contains("preheat", StringComparison.OrdinalIgnoreCase) ||
-            state.Contains("level", StringComparison.OrdinalIgnoreCase))
+            state.Contains("level", StringComparison.OrdinalIgnoreCase) ||
+            state.Contains("pause", StringComparison.OrdinalIgnoreCase) ||
+            state.Contains("resume", StringComparison.OrdinalIgnoreCase))
         {
             return PrinterRuntimeStatus.Busy;
         }
 
-        if (state.Contains("offline", StringComparison.OrdinalIgnoreCase))
+        if (state.Contains("offline", StringComparison.OrdinalIgnoreCase) ||
+            state.Contains("disconnect", StringComparison.OrdinalIgnoreCase))
+        {
+            return PrinterRuntimeStatus.Offline;
+        }
+
+        var status = GetLong(item, "status");
+        var printStatus = GetLong(item, "print_status") ?? GetLong(item, "printStatus");
+        var readyStatus = GetLong(item, "ready_status") ?? GetLong(item, "readyStatus");
+        var available = GetLong(item, "available");
+        var isPrinting = GetLong(item, "is_printing") ?? GetLong(item, "isPrinting");
+        var availableFlag = GetBool(item, "available");
+        var isPrintingFlag = GetBool(item, "is_printing") ?? GetBool(item, "isPrinting");
+        if (status == 1 ||
+            printStatus is 0 or 1 ||
+            readyStatus == 1 ||
+            available == 1 ||
+            isPrinting is 0 or 1 ||
+            availableFlag == true ||
+            isPrintingFlag == false)
+        {
+            return PrinterRuntimeStatus.Idle;
+        }
+
+        if (status == 2 ||
+            printStatus > 1 ||
+            readyStatus == 2 ||
+            available == 2 ||
+            isPrinting > 1 ||
+            availableFlag == false ||
+            isPrintingFlag == true)
+        {
+            return PrinterRuntimeStatus.Busy;
+        }
+
+        if (status == 0 && ContainsAnyStatusField(item))
         {
             return PrinterRuntimeStatus.Offline;
         }
@@ -365,6 +429,86 @@ public sealed class LanMqttPrinterClient : IPrinterTransport
         }
     }
 
+    private static bool ContainsStatusPayload(JsonElement root)
+    {
+        return EnumerateStatusItems(root).Any(ContainsAnyStatusField);
+    }
+
+    private static bool ContainsStatusPayload(string text)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(text);
+            return ContainsStatusPayload(document.RootElement);
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
+    }
+
+    private static IEnumerable<JsonElement> EnumerateStatusItems(JsonElement root)
+    {
+        if (root.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var item in root.EnumerateArray())
+            {
+                foreach (var nested in EnumerateStatusItems(item))
+                {
+                    yield return nested;
+                }
+            }
+        }
+        else if (root.ValueKind == JsonValueKind.Object)
+        {
+            foreach (var property in root.EnumerateObject())
+            {
+                if (property.Value.ValueKind is JsonValueKind.Object or JsonValueKind.Array)
+                {
+                    foreach (var nested in EnumerateStatusItems(property.Value))
+                    {
+                        yield return nested;
+                    }
+                }
+            }
+
+            if (ContainsAnyStatusField(root) && !IsGenericDoneAcknowledgement(root))
+            {
+                yield return root;
+            }
+        }
+    }
+
+    private static bool ContainsAnyStatusField(JsonElement item)
+    {
+        return HasProperty(item, "state") ||
+               HasProperty(item, "printer_state") ||
+               HasProperty(item, "work_state") ||
+               HasProperty(item, "print_state") ||
+               HasProperty(item, "print_status") ||
+               HasProperty(item, "printStatus") ||
+               HasProperty(item, "status") ||
+               HasProperty(item, "ready_status") ||
+               HasProperty(item, "readyStatus") ||
+               HasProperty(item, "available") ||
+               HasProperty(item, "is_printing") ||
+               HasProperty(item, "isPrinting") ||
+               HasProperty(item, "reason");
+    }
+
+    private static bool IsGenericDoneAcknowledgement(JsonElement item)
+    {
+        return string.Equals(GetString(item, "state"), "done", StringComparison.OrdinalIgnoreCase) &&
+               !HasProperty(item, "data") &&
+               !HasProperty(item, "project") &&
+               !HasProperty(item, "temp") &&
+               !HasProperty(item, "print_status") &&
+               !HasProperty(item, "ready_status") &&
+               !HasProperty(item, "available") &&
+               !HasProperty(item, "is_printing") &&
+               !HasProperty(item, "reason");
+    }
+
     private static bool IsFileListContainerName(string name)
     {
         return name.Equals("data", StringComparison.OrdinalIgnoreCase) ||
@@ -383,6 +527,11 @@ public sealed class LanMqttPrinterClient : IPrinterTransport
     {
         return action.Equals("listLocal", StringComparison.OrdinalIgnoreCase) ||
                action.Equals("listUdisk", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsStatusAction(string action)
+    {
+        return action.Equals("info", StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool LooksLikeFileName(string? value)
@@ -509,10 +658,17 @@ public sealed class LanMqttPrinterClient : IPrinterTransport
                     return Task.CompletedTask;
                 }
 
-                if (!IsListAction(action) || ContainsFileListPayload(text))
+                if (IsListAction(action) && !ContainsFileListPayload(text))
                 {
-                    completion.TrySetResult(text);
+                    return Task.CompletedTask;
                 }
+
+                if (IsStatusAction(action) && !ContainsStatusPayload(text))
+                {
+                    return Task.CompletedTask;
+                }
+
+                completion.TrySetResult(text);
 
                 return Task.CompletedTask;
             };

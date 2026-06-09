@@ -38,6 +38,8 @@ LAN MQTT accepts local printer TLS certificates because Anycubic LAN brokers can
 
 LAN file commands are published to the Anycubic MQTT `file` command topic with `listLocal`, `listUdisk`, `deleteLocal`, or `deleteUdisk` in the message payload. Read-only LAN file listing also tries the alternate `server/printer` topic family used by some older firmware.
 
+LAN status checks wait for actual `info/report` status payloads and ignore ack-only MQTT packets, because deletion stays blocked until KobraCache can confirm the printer is idle.
+
 Cloud-mode printer-local cache and USB listing use Anycubic cloud MQTT after a Slicer Cloud import. KobraCache lists cloud account files through the REST API, and it lists/deletes printer-local cache or USB files through LAN MQTT when LAN credentials are available or through cloud MQTT when cloud printer command metadata is available.
 
 Self-update downloads the latest public GitHub release asset matching `KobraCache-*-win-x64.zip`. The app stages the update under `%LOCALAPPDATA%\KobraCache\Updates`, closes, copies the new files over the current app folder, then relaunches. If the current app folder is not writable, the update will fail and details are written to `%LOCALAPPDATA%\KobraCache\Logs\updater.log`.
