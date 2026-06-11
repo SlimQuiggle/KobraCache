@@ -14,7 +14,7 @@ public sealed class AnycubicCloudClient : IPrinterTransport
     private const string AppId = "f9b3528877c94d5c9c5af32245db46ef";
     private const string AppSecret = "0cf75926606049a3937f56b0373b99fb";
     private const string SlicerVersion = "V3.0.0";
-    private const string ClientVersion = "0.5.0";
+    private const string ClientVersion = "0.12.0";
     private const string DeviceType = "pcf";
     private static readonly TimeSpan DefaultCloudMqttTimeout = TimeSpan.FromSeconds(20);
     private readonly HttpClient _httpClient;
@@ -35,6 +35,11 @@ public sealed class AnycubicCloudClient : IPrinterTransport
         if (string.IsNullOrWhiteSpace(slicerAccessToken))
         {
             throw new InvalidOperationException("Slicer cloud import requires an access token from Slicer Next.");
+        }
+
+        if (IsUsableAnycubicSessionToken(slicerAccessToken, DateTimeOffset.UtcNow))
+        {
+            return slicerAccessToken.Trim();
         }
 
         var body = new
@@ -559,6 +564,51 @@ public sealed class AnycubicCloudClient : IPrinterTransport
         return long.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var numeric)
             ? numeric
             : value;
+    }
+
+    private static bool IsUsableAnycubicSessionToken(string token, DateTimeOffset now)
+    {
+        var parts = token.Trim().Split('.');
+        if (parts.Length != 3)
+        {
+            return false;
+        }
+
+        try
+        {
+            var payload = parts[1].Replace('-', '+').Replace('_', '/');
+            var remainder = payload.Length % 4;
+            if (remainder != 0)
+            {
+                payload += new string('=', 4 - remainder);
+            }
+
+            using var document = JsonDocument.Parse(Convert.FromBase64String(payload));
+            var root = document.RootElement;
+            if (GetString(root, "user_id") is null && GetString(root, "userId") is null)
+            {
+                return false;
+            }
+
+            if (!long.TryParse(GetString(root, "exp"), NumberStyles.Integer, CultureInfo.InvariantCulture, out var unixExpiration))
+            {
+                return false;
+            }
+
+            return DateTimeOffset.FromUnixTimeSeconds(unixExpiration) > now.AddMinutes(5);
+        }
+        catch (FormatException)
+        {
+            return false;
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
+        catch (ArgumentOutOfRangeException)
+        {
+            return false;
+        }
     }
 
     private static string FirstNonBlank(params string?[] values)

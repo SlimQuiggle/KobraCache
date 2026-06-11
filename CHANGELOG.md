@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.12.0 - 2026-06-11
+
+- Fixed Slicer Cloud import for Anycubic Slicer Next 1.4.1.2, where the cloud config no longer stores a plaintext `anycubic_cloud.access_token`.
+- KobraCache now falls back to the latest valid Anycubic cloud session token logged by Slicer Next's `MainApp_*.log` during cloud MQTT startup.
+- Existing Slicer plaintext-token import and Slicer LAN import behavior remain supported.
+- Added tests for Slicer 1.4.1.2 session-token import and direct Anycubic session-token cloud listing.
+
 ## 0.11.0 - 2026-06-09
 
 - Fixed LAN status queries accepting ack-only MQTT packets as `Unknown`.

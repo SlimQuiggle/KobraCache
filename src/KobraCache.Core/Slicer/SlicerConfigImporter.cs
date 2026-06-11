@@ -1,10 +1,11 @@
 using System.Text;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using KobraCache.Core.Models;
 
 namespace KobraCache.Core.Slicer;
 
-public sealed class SlicerConfigImporter
+public sealed partial class SlicerConfigImporter
 {
     public static string GetDefaultConfigPath()
     {
@@ -34,7 +35,8 @@ public sealed class SlicerConfigImporter
         });
 
         var root = document.RootElement;
-        var token = TryGetString(root, "anycubic_cloud", "access_token");
+        var token = TryGetString(root, "anycubic_cloud", "access_token")
+            ?? TryGetLatestCloudSessionToken(path, DateTimeOffset.UtcNow);
         var rawLanList = TryGetString(root, "anycubic_remote_printing", "machine_list_of_LAN")
             ?? TryGetString(root, "machine_list_of_LAN");
 
@@ -169,6 +171,91 @@ public sealed class SlicerConfigImporter
         return remainder == 0 ? trimmed : trimmed + new string('=', 4 - remainder);
     }
 
+    private static string? TryGetLatestCloudSessionToken(string configPath, DateTimeOffset now)
+    {
+        var configDirectory = Path.GetDirectoryName(configPath);
+        if (string.IsNullOrWhiteSpace(configDirectory))
+        {
+            return null;
+        }
+
+        var logDirectory = Path.Combine(configDirectory, "log");
+        if (!Directory.Exists(logDirectory))
+        {
+            return null;
+        }
+
+        foreach (var logPath in Directory.EnumerateFiles(logDirectory, "MainApp_*.log")
+                     .OrderByDescending(File.GetLastWriteTimeUtc))
+        {
+            string text;
+            try
+            {
+                text = File.ReadAllText(logPath);
+            }
+            catch (IOException)
+            {
+                continue;
+            }
+            catch (UnauthorizedAccessException)
+            {
+                continue;
+            }
+
+            var matches = CloudMqttTokenRegex().Matches(text);
+            for (var i = matches.Count - 1; i >= 0; i--)
+            {
+                var token = matches[i].Groups["token"].Value;
+                if (IsUsableAnycubicSessionToken(token, now))
+                {
+                    return token;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    private static bool IsUsableAnycubicSessionToken(string token, DateTimeOffset now)
+    {
+        var parts = token.Split('.');
+        if (parts.Length != 3)
+        {
+            return false;
+        }
+
+        try
+        {
+            var payloadBytes = Convert.FromBase64String(AddBase64Padding(parts[1].Replace('-', '+').Replace('_', '/')));
+            using var document = JsonDocument.Parse(payloadBytes);
+            var root = document.RootElement;
+            if (TryGetString(root, "user_id") is null && TryGetString(root, "userId") is null)
+            {
+                return false;
+            }
+
+            var exp = TryGetString(root, "exp");
+            if (!long.TryParse(exp, out var unixExpiration))
+            {
+                return false;
+            }
+
+            return DateTimeOffset.FromUnixTimeSeconds(unixExpiration) > now.AddMinutes(5);
+        }
+        catch (FormatException)
+        {
+            return false;
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
+        catch (ArgumentOutOfRangeException)
+        {
+            return false;
+        }
+    }
+
     private static string? TryGetString(JsonElement element, params string[] path)
     {
         var current = element;
@@ -202,4 +289,7 @@ public sealed class SlicerConfigImporter
 
         return string.Empty;
     }
+
+    [GeneratedRegex(@"CloudMqttClient\.cpp:\d+\s+connect url: .*?, username: .*?, token: (?<token>[A-Za-z0-9_\-]+(?:\.[A-Za-z0-9_\-]+){2})", RegexOptions.IgnoreCase)]
+    private static partial Regex CloudMqttTokenRegex();
 }

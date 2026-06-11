@@ -4,6 +4,8 @@ KobraCache is built for Anycubic printers that expose the same Slicer Next / Any
 
 The short version: Kobra S1 is confirmed. The Kobra S1 Max and Kobra 3 family look like the best candidates because they share the newer Kobra OS / GoKlipper-style ecosystem and Anycubic Slicer Next / cloud workflow, but they should remain marked untested until users verify file listing and deletion on real printers.
 
+Newest verified Slicer setup: Anycubic Slicer Next 1.4.1.2 with Slicer Cloud import. This version stores the cloud login differently than older Slicer builds, so KobraCache v0.12.0 reads the current Slicer cloud session from Slicer's own `MainApp_*.log` files during import when needed.
+
 ## Confirmed
 
 | Model | Status | Notes |
@@ -39,6 +41,8 @@ A printer must meet these requirements for full cleanup support:
 - The cloud printer record includes a printer id, key, and machine type.
 - The printer responds to Anycubic file-manager commands for `listLocal`, `listUdisk`, `deleteLocal`, and `deleteUdisk`.
 - KobraCache can confirm the printer is idle before deletion.
+
+For Slicer Cloud import on Slicer Next 1.4.1.2, open Slicer and let it finish cloud login before importing in KobraCache. KobraCache reads the latest valid Slicer cloud session token only during the import action and does not save it.
 
 IP addresses alone are not enough to list or delete files. KobraCache no longer supports adding IP-only printer rows; import printers from Slicer LAN or Slicer Cloud so the app has the credentials and printer metadata needed for file commands.
 

@@ -6,6 +6,7 @@ KobraCache is a Windows desktop utility that gives Anycubic Kobra owners an easi
 
 - Anycubic Slicer Next LAN import from `%APPDATA%\AnycubicSlicerNext\AnycubicSlicerNext.conf`.
 - Anycubic Slicer Next cloud import from the `Import Cloud Printers` action.
+- Verified cloud import with Anycubic Slicer Next 1.4.1.2.
 - Separate cleanup targets for local printer cache, USB storage, and cloud files.
 - Local cache selected by default, with USB and Cloud opt-in per view.
 - View-before-delete and a second confirmation before deletion.
@@ -28,7 +29,7 @@ See [Printer Compatibility](docs/COMPATIBILITY.md) for the current compatibility
 
 Printers must be imported from Anycubic Slicer Next. IP-only printer entry is not supported because an IP address does not provide the LAN MQTT or cloud command credentials needed to list and delete files.
 
-KobraCache does not persist Anycubic cloud tokens. Cloud tokens are read from Slicer only during the explicit import action and kept in memory for the current app session.
+KobraCache does not persist Anycubic cloud tokens. Cloud tokens are read from Slicer only during the explicit import action and kept in memory for the current app session. With Slicer Next 1.4.1.2, cloud import uses the latest valid Slicer cloud session token from `%APPDATA%\AnycubicSlicerNext\log\MainApp_*.log` when the Slicer config no longer contains a plaintext cloud token.
 
 Cloud REST and MQTT paths are implemented from public behavior references and should be validated against a live logged-in Slicer account before using deletion broadly.
 
@@ -52,7 +53,7 @@ KobraCache writes diagnostic logs to:
 %LOCALAPPDATA%\KobraCache\Logs
 ```
 
-The app has an `Open Logs` button and the tray icon has an `Open Logs` menu item. Logs include startup, window initialization, major UI actions, caught UI errors, and unhandled exceptions. Slicer cloud tokens are redacted and are not persisted by the app.
+The app has an `Open Logs` button and the tray icon has an `Open Logs` menu item. Logs include startup, window initialization, major UI actions, caught UI errors, and unhandled exceptions. Slicer cloud tokens are redacted from KobraCache logs and are not persisted by the app.
 
 ## Icon Assets
 

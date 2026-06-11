@@ -66,6 +66,49 @@ public sealed class CoreBehaviorTests
     }
 
     [Fact]
+    public async Task SlicerImporter_reads_slicer_1412_cloud_session_from_mainapp_log()
+    {
+        var tempDirectory = Path.Combine(Path.GetTempPath(), $"kobracache-{Guid.NewGuid():N}");
+        var configPath = Path.Combine(tempDirectory, "AnycubicSlicerNext.conf");
+        var logDirectory = Path.Combine(tempDirectory, "log");
+        var sessionToken = GenerateJwt(new
+        {
+            user_id = 431823,
+            create_time = 1781134318,
+            exp = 4102444800L,
+            isCN = "0",
+            mode = "prod"
+        });
+
+        try
+        {
+            Directory.CreateDirectory(logDirectory);
+            await File.WriteAllTextAsync(configPath, """
+            {
+              "anycubic_cloud": {
+                "8F38Vz7UeiZf7/ZcSK/y0Q==": true,
+                "l1qde7GcMLvhaKcXOcWRLA==": "encrypted-slicer-1412-token"
+              }
+            }
+            """);
+            await File.WriteAllTextAsync(
+                Path.Combine(logDirectory, "MainApp_20260610.log"),
+                $"202606101831 MainApp warning 144248 CloudMqttClient.cpp:89 connect url: mqtts://mqtt-universe.anycubic.com:8883, username: tester@example.invalid, token: {sessionToken}");
+
+            var result = await new SlicerConfigImporter().ImportAsync(configPath);
+
+            Assert.Equal(sessionToken, result.CloudAccessToken);
+        }
+        finally
+        {
+            if (Directory.Exists(tempDirectory))
+            {
+                Directory.Delete(tempDirectory, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
     public void SlicerImporter_extracts_first_json_object_with_string_braces()
     {
         var content = """
@@ -287,6 +330,42 @@ public sealed class CoreBehaviorTests
     }
 
     [Fact]
+    public async Task AnycubicCloudClient_accepts_existing_session_token_without_exchange()
+    {
+        var sessionToken = GenerateJwt(new
+        {
+            user_id = 431823,
+            exp = 4102444800L,
+            isCN = "0",
+            mode = "prod"
+        });
+        var handler = new StubHttpHandler(request =>
+        {
+            if (request.RequestUri!.AbsolutePath.EndsWith("/v3/public/loginWithAccessToken", StringComparison.Ordinal))
+            {
+                return new HttpResponseMessage(HttpStatusCode.BadRequest);
+            }
+
+            Assert.True(request.Headers.TryGetValues("XX-Token", out var values));
+            Assert.Equal(sessionToken, Assert.Single(values));
+
+            if (request.RequestUri!.AbsolutePath.EndsWith("/work/printer/getPrinters", StringComparison.Ordinal))
+            {
+                return JsonResponse("""{"data":[{"id":"printer-1","key":"cloud-key","name":"Shop S1"}]}""");
+            }
+
+            return new HttpResponseMessage(HttpStatusCode.NotFound);
+        });
+        var httpClient = new HttpClient(handler) { BaseAddress = new Uri("https://example.invalid/p/p/workbench/api/") };
+        var cloudClient = new AnycubicCloudClient(httpClient);
+
+        var printers = await cloudClient.ListPrintersAsync(sessionToken);
+
+        Assert.Single(printers);
+        Assert.DoesNotContain(handler.Requests, request => request.RequestUri!.AbsolutePath.EndsWith("/v3/public/loginWithAccessToken", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public async Task AnycubicCloudClient_maps_cloud_task_status_to_busy()
     {
         var handler = new StubHttpHandler(request =>
@@ -471,6 +550,21 @@ public sealed class CoreBehaviorTests
         var secondText = Convert.ToBase64String(secondPayload).TrimEnd('=');
         var firstPayload = Encoding.ASCII.GetBytes(secondText).Select(value => unchecked((byte)(value + 5))).ToArray();
         return Convert.ToBase64String(firstPayload).TrimEnd('=');
+    }
+
+    private static string GenerateJwt(object payload)
+    {
+        static string Base64Url(byte[] bytes)
+        {
+            return Convert.ToBase64String(bytes)
+                .TrimEnd('=')
+                .Replace('+', '-')
+                .Replace('/', '_');
+        }
+
+        var header = Base64Url(Encoding.UTF8.GetBytes("""{"typ":"JWT","alg":"HS512"}"""));
+        var body = Base64Url(JsonSerializer.SerializeToUtf8Bytes(payload));
+        return $"{header}.{body}.signature";
     }
 
     private static HttpResponseMessage JsonResponse(string json)
