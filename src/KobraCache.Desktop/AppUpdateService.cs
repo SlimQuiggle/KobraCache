@@ -90,6 +90,11 @@ public sealed class AppUpdateService
     {
         var processId = Environment.ProcessId.ToString();
         var logPath = Path.Combine(AppLogger.LogDirectory, "updater.log");
+        Process.Start(BuildInstallerStartInfo(update, processId, logPath));
+    }
+
+    internal static ProcessStartInfo BuildInstallerStartInfo(PreparedUpdate update, string processId, string logPath)
+    {
         var startInfo = new ProcessStartInfo
         {
             FileName = "powershell.exe",
@@ -99,6 +104,9 @@ public sealed class AppUpdateService
         };
 
         startInfo.ArgumentList.Add("-NoProfile");
+        startInfo.ArgumentList.Add("-NonInteractive");
+        startInfo.ArgumentList.Add("-WindowStyle");
+        startInfo.ArgumentList.Add("Hidden");
         startInfo.ArgumentList.Add("-ExecutionPolicy");
         startInfo.ArgumentList.Add("Bypass");
         startInfo.ArgumentList.Add("-File");
@@ -114,7 +122,7 @@ public sealed class AppUpdateService
         startInfo.ArgumentList.Add("-LogPath");
         startInfo.ArgumentList.Add(logPath);
 
-        Process.Start(startInfo);
+        return startInfo;
     }
 
     private async Task DownloadFileAsync(Uri downloadUrl, string outputPath, CancellationToken cancellationToken)

@@ -4,7 +4,7 @@ KobraCache is built for Anycubic printers that expose the same Slicer Next / Any
 
 The short version: Kobra S1 is confirmed. The Kobra S1 Max and Kobra 3 family look like the best candidates because they share the newer Kobra OS / GoKlipper-style ecosystem and Anycubic Slicer Next / cloud workflow, but they should remain marked untested until users verify file listing and deletion on real printers.
 
-Newest verified Slicer setup: Anycubic Slicer Next 1.4.1.2 with Slicer Cloud import. This version stores the cloud login differently than older Slicer builds, so KobraCache v0.12.0 reads the current Slicer cloud session from Slicer's own `MainApp_*.log` files during import when needed.
+Newest verified Slicer setup: Anycubic Slicer Next 1.4.1.2 with Slicer Cloud import. This version stores the cloud login differently than older Slicer builds, so KobraCache v0.12.0 and later read the current Slicer cloud session from Slicer's own `MainApp_*.log` files during import when needed.
 
 ## Confirmed
 

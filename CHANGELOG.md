@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.12.1 - 2026-06-11
+
+- Confirmed normal app startup does not launch PowerShell or run an updater script.
+- Hardened the self-updater installer launch so the generated PowerShell script is started with `CreateNoWindow`, `-NonInteractive`, and `-WindowStyle Hidden`.
+
 ## 0.12.0 - 2026-06-11
 
 - Fixed Slicer Cloud import for Anycubic Slicer Next 1.4.1.2, where the cloud config no longer stores a plaintext `anycubic_cloud.access_token`.
